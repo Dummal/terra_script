@@ -23,29 +23,29 @@ variable "aws_region" {
 }
 
 variable "organization_unit_name" {
-  description = "The name of the Organizational Unit (OU)"
+  description = "The name of the Organizational Unit (OU) to create"
   type        = string
 }
 
-variable "parent_id" {
-  description = "The ID of the parent organizational unit or root"
+variable "parent_ou_id" {
+  description = "The ID of the parent Organizational Unit or root under which the new OU will be created"
   type        = string
 }
 
 variable "scp_policies" {
-  description = "List of Service Control Policies (SCPs) to attach to the OU"
+  description = "List of Service Control Policies (SCPs) to attach to the Organizational Unit"
   type        = list(object({
     name        = string
     description = string
-    content     = string
+    policy      = string
   }))
   default = []
 }
 
 # Resource: Create Organizational Unit
 resource "aws_organizations_organizational_unit" "this" {
-  name     = var.organization_unit_name
-  parent_id = var.parent_id
+  name      = var.organization_unit_name
+  parent_id = var.parent_ou_id
 
   tags = {
     Environment = "Production"
@@ -55,10 +55,10 @@ resource "aws_organizations_organizational_unit" "this" {
 
 # Resource: Create and Attach SCPs
 resource "aws_organizations_policy" "scp" {
-  for_each    = { for policy in var.scp_policies : policy.name => policy }
+  for_each    = { for scp in var.scp_policies : scp.name => scp }
   name        = each.value.name
   description = each.value.description
-  content     = each.value.content
+  content     = each.value.policy
   type        = "SERVICE_CONTROL_POLICY"
 
   tags = {
@@ -68,7 +68,7 @@ resource "aws_organizations_policy" "scp" {
 }
 
 resource "aws_organizations_policy_attachment" "scp_attachment" {
-  for_each = { for policy in var.scp_policies : policy.name => policy }
+  for_each = { for scp in var.scp_policies : scp.name => scp }
   policy_id = aws_organizations_policy.scp[each.key].id
   target_id = aws_organizations_organizational_unit.this.id
 }
@@ -81,39 +81,39 @@ output "organizational_unit_id" {
 
 output "scp_policy_ids" {
   description = "The IDs of the attached Service Control Policies (SCPs)"
-  value       = [for policy in aws_organizations_policy.scp : policy.id]
+  value       = [for scp in aws_organizations_policy.scp : scp.id]
 }
 ```
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file to define and customize variables if needed.
+2. Create a `variables.tf` file to define and override variables if needed.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-1. The `parent_id` is provided and valid (either a root ID or an existing OU ID).
-2. SCPs are optional. If no SCPs are provided, only the OU will be created.
-3. The `scp_policies` variable expects a list of objects with `name`, `description`, and `content` fields for each SCP.
+- The `parent_ou_id` is provided and valid.
+- SCP policies are optional. If no SCPs are provided, only the OU will be created.
+- The `scp_policies` variable expects a list of objects with `name`, `description`, and `policy` fields. The `policy` field should contain the JSON policy as a string.
 
 ### Example `terraform.tfvars`:
 ```hcl
 aws_region = "us-east-1"
 organization_unit_name = "ExampleOU"
-parent_id = "r-examplerootid"
+parent_ou_id = "r-examplerootid"
 scp_policies = [
   {
-    name        = "DenyAllExceptS3",
-    description = "Deny all actions except S3 access",
-    content     = <<EOT
+    name        = "DenyAllExceptBilling"
+    description = "Deny all actions except billing"
+    policy      = <<EOT
 {
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Deny",
-      "NotAction": "s3:*",
+      "NotAction": "aws-portal:*Billing",
       "Resource": "*"
     }
   ]
