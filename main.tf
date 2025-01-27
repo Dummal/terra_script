@@ -1,6 +1,6 @@
 ```hcl
 # main.tf
-# Terraform script to set up a basic AWS Landing Zone with multi-region support and AWS CloudTrail logging enabled.
+# Terraform configuration for setting up a multi-region AWS environment with CloudTrail logging enabled.
 
 terraform {
   required_version = ">= 1.3.0"
@@ -47,13 +47,22 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
   tags = var.default_tags
 }
 
-# IAM policy for CloudTrail to write logs to the S3 bucket
+# S3 bucket policy to allow CloudTrail to write logs
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.cloudtrail_logs.arn
+      },
       {
         Sid       = "AWSCloudTrailWrite"
         Effect    = "Allow"
@@ -82,13 +91,13 @@ variable "default_region" {
 variable "cloudtrail_name" {
   description = "Name of the CloudTrail"
   type        = string
-  default     = "landingzone-cloudtrail"
+  default     = "default-cloudtrail"
 }
 
 variable "cloudtrail_s3_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
-  default     = "landingzone-cloudtrail-logs"
+  default     = "cloudtrail-logs-bucket"
 }
 
 variable "enable_multi_region" {
@@ -102,8 +111,7 @@ variable "default_tags" {
   type        = map(string)
   default = {
     Environment = "production"
-    Project     = "landingzone"
-    Owner       = "Hello"
+    Project     = "Hello"
   }
 }
 
@@ -121,15 +129,14 @@ output "cloudtrail_s3_bucket_name" {
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file if you want to override any default values.
+2. Create a `variables.tf` file if you want to override the default values.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled for CloudTrail as per the user input.
-- AWS Organizations is not used, so no additional account management is configured.
-- Logs are not centralized into a logging account, so the S3 bucket is created in the same account.
-- Default tags include `Environment`, `Project`, and `Owner` for resource identification.
-- Sensitive data like bucket names and CloudTrail names are parameterized for flexibility.
+- Multi-region support is enabled (`enable_multi_region = true`).
+- AWS Organizations is not used, so no account management is included.
+- CloudTrail logs are stored in a dedicated S3 bucket with encryption and versioning enabled.
+- Default tags are applied to all resources for better resource management.
