@@ -1,6 +1,6 @@
 ```hcl
 # main.tf
-# Terraform script to set up a basic AWS Landing Zone with multi-region support and AWS CloudTrail logging enabled.
+# Terraform configuration for setting up a multi-region AWS environment with CloudTrail logging enabled.
 
 terraform {
   required_version = ">= 1.3.0"
@@ -22,39 +22,19 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = var.enable_multi_region
-  enable_log_file_validation    = true
-  tags                          = var.default_tags
-}
-
-# S3 bucket to store CloudTrail logs
-resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = var.cloudtrail_s3_bucket_name
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  lifecycle_rule {
-    id      = "log-retention"
-    enabled = true
-
-    expiration {
-      days = var.log_retention_days
-    }
-  }
+  enable_logging                = true
 
   tags = var.default_tags
 }
 
-# IAM policy for CloudTrail to write logs to the S3 bucket
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket = var.cloudtrail_s3_bucket_name
+
+  tags = var.default_tags
+}
+
+# S3 bucket policy for CloudTrail logs
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
 
@@ -67,8 +47,8 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail_logs.arn
+        Action   = "s3:GetBucketAcl"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.cloudtrail_logs.bucket}"
       },
       {
         Sid       = "AWSCloudTrailWrite"
@@ -76,8 +56,8 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
-        Action    = "s3:PutObject"
-        Resource  = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        Action   = "s3:PutObject"
+        Resource = "arn:aws:s3:::${aws_s3_bucket.cloudtrail_logs.bucket}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
@@ -87,6 +67,9 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
     ]
   })
 }
+
+# Data source to fetch the current AWS account ID
+data "aws_caller_identity" "current" {}
 
 # Variables
 variable "default_region" {
@@ -98,13 +81,13 @@ variable "default_region" {
 variable "cloudtrail_name" {
   description = "Name of the CloudTrail"
   type        = string
-  default     = "landingzone-cloudtrail"
+  default     = "default-cloudtrail"
 }
 
 variable "cloudtrail_s3_bucket_name" {
   description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
-  default     = "landingzone-cloudtrail-logs"
+  default     = "cloudtrail-logs-bucket"
 }
 
 variable "enable_multi_region" {
@@ -113,17 +96,11 @@ variable "enable_multi_region" {
   default     = true
 }
 
-variable "log_retention_days" {
-  description = "Number of days to retain logs in the S3 bucket"
-  type        = number
-  default     = 90
-}
-
 variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
   default = {
-    Environment = "LandingZone"
+    Environment = "production"
     Project     = "Hello"
   }
 }
@@ -135,13 +112,8 @@ output "cloudtrail_arn" {
 }
 
 output "cloudtrail_s3_bucket_name" {
-  description = "Name of the S3 bucket storing CloudTrail logs"
+  description = "Name of the S3 bucket used for CloudTrail logs"
   value       = aws_s3_bucket.cloudtrail_logs.bucket
-}
-
-output "cloudtrail_s3_bucket_arn" {
-  description = "ARN of the S3 bucket storing CloudTrail logs"
-  value       = aws_s3_bucket.cloudtrail_logs.arn
 }
 ```
 
@@ -154,8 +126,7 @@ output "cloudtrail_s3_bucket_arn" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled for CloudTrail as per the requirements.
-- AWS Organizations is not used, so no account management is included.
-- Logs are not centralized into a separate logging account.
-- Default region is set to `us-east-1`, but this can be overridden using the `default_region` variable.
-- Default log retention is 90 days, which can be adjusted using the `log_retention_days` variable.
+- Multi-region support is enabled (`enable_multi_region = true`).
+- AWS Organizations is not used, so no centralized logging account is configured.
+- Default tags are applied to all resources for better resource management.
+- The S3 bucket name for CloudTrail logs is unique and globally available. Adjust the `cloudtrail_s3_bucket_name` variable if needed.
