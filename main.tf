@@ -31,12 +31,12 @@ resource "aws_cloudtrail" "main" {
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = var.cloudtrail_s3_bucket_name
 
-  acl = "private"
-
+  # Enable versioning for the bucket
   versioning {
     enabled = true
   }
 
+  # Enable server-side encryption
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
@@ -55,15 +55,6 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid       = "AWSCloudTrailAclCheck"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail_logs.arn
-      },
       {
         Sid       = "AWSCloudTrailWrite"
         Effect    = "Allow"
@@ -89,12 +80,6 @@ variable "default_region" {
   default     = "us-east-1"
 }
 
-variable "enable_multi_region" {
-  description = "Enable multi-region support for CloudTrail"
-  type        = bool
-  default     = true
-}
-
 variable "cloudtrail_name" {
   description = "Name of the CloudTrail"
   type        = string
@@ -107,24 +92,35 @@ variable "cloudtrail_s3_bucket_name" {
   default     = "landingzone-cloudtrail-logs"
 }
 
+variable "enable_multi_region" {
+  description = "Enable multi-region support for CloudTrail"
+  type        = bool
+  default     = true
+}
+
 variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
   default = {
-    Environment = "production"
-    Project     = "landingzone"
+    Environment = "LandingZone"
+    Project     = "Hello"
   }
 }
 
 # Outputs
-output "cloudtrail_name" {
-  description = "Name of the CloudTrail"
-  value       = aws_cloudtrail.main.name
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = aws_cloudtrail.main.arn
 }
 
-output "cloudtrail_s3_bucket" {
-  description = "S3 bucket used for CloudTrail logs"
+output "cloudtrail_s3_bucket_name" {
+  description = "Name of the S3 bucket used for CloudTrail logs"
   value       = aws_s3_bucket.cloudtrail_logs.bucket
+}
+
+output "cloudtrail_s3_bucket_arn" {
+  description = "ARN of the S3 bucket used for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.arn
 }
 ```
 
@@ -137,8 +133,8 @@ output "cloudtrail_s3_bucket" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled by default (`enable_multi_region = true`).
+- Multi-region support is enabled for CloudTrail as per the user input.
 - AWS Organizations is not used, so no account management is included.
-- Logs are not centralized into a separate logging account.
-- Default region is set to `us-east-1`.
+- Logs are not centralized into a logging account.
+- Default region is set to `us-east-1` but can be overridden using the `default_region` variable.
 - Default tags are applied to all resources for better resource management.
