@@ -47,7 +47,17 @@ output "organization_id" {
 
 output "organizational_units" {
   value       = module.aws_organization.organizational_units
-  description = "The list of created Organizational Units."
+  description = "List of created Organizational Units."
+}
+
+output "enabled_services" {
+  value       = module.service_access.enabled_services
+  description = "List of AWS services enabled for the organization."
+}
+
+output "custom_policies" {
+  value       = module.policies.custom_policies
+  description = "List of custom policies created and attached."
 }
 ```
 
@@ -83,13 +93,13 @@ variable "tags" {
 }
 
 variable "services" {
-  description = "A list of AWS services to grant access to the organization."
+  description = "A list of AWS services to enable access for in the organization."
   type        = list(string)
   default     = ["cloudtrail.amazonaws.com", "config.amazonaws.com"]
 }
 
 variable "custom_policies" {
-  description = "A list of custom policies to create and their details."
+  description = "A list of custom policies to create and attach to the organization."
   type = list(object({
     name        = string
     description = string
@@ -102,7 +112,7 @@ variable "custom_policies" {
 
 ```hcl
 # modules/organization/main.tf
-# Module to create an AWS Organization and Organizational Units.
+# Module to create AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
   feature_set = var.organization_features
@@ -133,10 +143,14 @@ resource "aws_organizations_organization" "this" {
   feature_set = "ALL"
 }
 
-resource "aws_organizations_service_access" "service" {
+resource "aws_organizations_organization_service_access" "service_access" {
   for_each = toset(var.services)
 
   service_principal = each.value
+}
+
+output "enabled_services" {
+  value = aws_organizations_organization_service_access.service_access[*].service_principal
 }
 ```
 
@@ -159,6 +173,10 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
   policy_id = aws_organizations_policy.custom_policy[each.key].id
   target_id = each.value.target_id
 }
+
+output "custom_policies" {
+  value = aws_organizations_policy.custom_policy[*].name
+}
 ```
 
 ### Instructions to Apply:
@@ -170,6 +188,5 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
+- Default values are provided for features, OUs, and services.
 - Custom policies are optional and can be defined as needed.
-- Control Tower setup is not included, as it requires manual intervention.
