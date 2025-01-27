@@ -3,13 +3,13 @@
 # This Terraform script sets up an AWS Organization with modular configurations for features, OUs, policies, and tags.
 
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = ">= 4.0"
     }
   }
-  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -18,7 +18,7 @@ provider "aws" {
 
 # Module: AWS Organization
 module "aws_organization" {
-  source = "./modules/organization"
+  source = "./modules/aws_organization"
 
   organization_features = var.organization_features
   organizational_units  = var.organizational_units
@@ -47,17 +47,7 @@ output "organization_id" {
 
 output "organizational_units" {
   value       = module.aws_organization.organizational_units
-  description = "List of created Organizational Units."
-}
-
-output "enabled_services" {
-  value       = module.service_access.enabled_services
-  description = "List of AWS services enabled for the organization."
-}
-
-output "custom_policies" {
-  value       = module.policies.custom_policies
-  description = "List of custom policies created and attached."
+  description = "The list of created Organizational Units."
 }
 ```
 
@@ -80,7 +70,7 @@ variable "organization_features" {
 variable "organizational_units" {
   description = "A list of organizational units to create within the AWS Organization."
   type        = list(string)
-  default     = ["Security", "Audit Log"]
+  default     = ["Security", "AuditLog"]
 }
 
 variable "tags" {
@@ -93,13 +83,13 @@ variable "tags" {
 }
 
 variable "services" {
-  description = "A list of AWS services to enable access for in the organization."
+  description = "A list of AWS services to grant access to the organization."
   type        = list(string)
   default     = ["cloudtrail.amazonaws.com", "config.amazonaws.com"]
 }
 
 variable "custom_policies" {
-  description = "A list of custom policies to create and attach to the organization."
+  description = "A list of custom policies to create and their details."
   type = list(object({
     name        = string
     description = string
@@ -111,7 +101,7 @@ variable "custom_policies" {
 ```
 
 ```hcl
-# modules/organization/main.tf
+# modules/aws_organization/main.tf
 # Module to create an AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
@@ -148,10 +138,6 @@ resource "aws_organizations_organization_service_access" "service_access" {
 
   service_principal = each.value
 }
-
-output "enabled_services" {
-  value = aws_organizations_organization_service_access.service_access[*].service_principal
-}
 ```
 
 ```hcl
@@ -173,14 +159,10 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
   policy_id = aws_organizations_policy.custom_policy[each.key].id
   target_id = each.value.target_id
 }
-
-output "custom_policies" {
-  value = aws_organizations_policy.custom_policy[*].name
-}
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/organization`, `modules/service_access`, `modules/policies`).
+1. Save the main script in `main.tf` and the modules in their respective directories (`modules/aws_organization`, `modules/service_access`, `modules/policies`).
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
@@ -188,5 +170,6 @@ output "custom_policies" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and services.
-- Custom policies are optional and can be added as needed.
+- Default features are set to "ALL".
+- Organizational Units and tags are provided as examples.
+- Custom policies are optional and can be defined in `custom_policies` variable.
