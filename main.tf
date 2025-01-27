@@ -18,7 +18,7 @@ provider "aws" {
 
 # Module: AWS Organization
 module "aws_organization" {
-  source = "./modules/aws_organization"
+  source = "./modules/organization"
 
   organization_features = var.organization_features
   organizational_units  = var.organizational_units
@@ -49,16 +49,6 @@ output "organizational_units" {
   value       = module.aws_organization.organizational_units
   description = "The list of created Organizational Units."
 }
-
-output "enabled_services" {
-  value       = module.service_access.enabled_services
-  description = "The list of AWS services enabled for the organization."
-}
-
-output "custom_policies" {
-  value       = module.policies.custom_policies
-  description = "The list of custom policies created and attached."
-}
 ```
 
 ```hcl
@@ -66,7 +56,7 @@ output "custom_policies" {
 # Define variables for the AWS Organization setup.
 
 variable "aws_region" {
-  description = "The AWS region to use for the provider."
+  description = "The AWS region to deploy the resources."
   type        = string
   default     = "us-east-1"
 }
@@ -93,13 +83,13 @@ variable "tags" {
 }
 
 variable "services" {
-  description = "A list of AWS services to enable access for in the organization."
+  description = "A list of AWS services to grant access to the organization."
   type        = list(string)
   default     = ["cloudtrail.amazonaws.com", "config.amazonaws.com"]
 }
 
 variable "custom_policies" {
-  description = "A list of custom policies to create and attach to the organization."
+  description = "A list of custom policies to create and their details."
   type = list(object({
     name        = string
     description = string
@@ -111,7 +101,7 @@ variable "custom_policies" {
 ```
 
 ```hcl
-# modules/aws_organization/main.tf
+# modules/organization/main.tf
 # Module to create AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
@@ -148,10 +138,6 @@ resource "aws_organizations_organization_service_access" "service_access" {
 
   service_principal = each.value
 }
-
-output "enabled_services" {
-  value = aws_organizations_organization_service_access.service_access[*].service_principal
-}
 ```
 
 ```hcl
@@ -173,14 +159,10 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
   policy_id = aws_organizations_policy.custom_policy[each.key].id
   target_id = each.value.target_id
 }
-
-output "custom_policies" {
-  value = aws_organizations_policy.custom_policy[*].name
-}
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/aws_organization`, `modules/service_access`, `modules/policies`).
+1. Save the `main.tf`, `variables.tf`, and module files in their respective directories.
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
@@ -188,5 +170,6 @@ output "custom_policies" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
-- Custom policies are optional and can be defined as needed.
+- Default features are set to "ALL".
+- Organizational Units and tags are provided as examples.
+- Custom policies are optional and can be defined in the `custom_policies` variable.
