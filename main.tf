@@ -47,17 +47,17 @@ output "organization_id" {
 
 output "organizational_units" {
   value       = module.aws_organization.organizational_units
-  description = "The list of created Organizational Units."
+  description = "List of created Organizational Units."
 }
 
 output "enabled_services" {
   value       = module.service_access.enabled_services
-  description = "The list of AWS services enabled for the organization."
+  description = "List of AWS services enabled for the organization."
 }
 
 output "custom_policies" {
   value       = module.policies.custom_policies
-  description = "The list of custom policies created and attached."
+  description = "List of custom policies created and attached."
 }
 ```
 
@@ -112,7 +112,7 @@ variable "custom_policies" {
 
 ```hcl
 # modules/organization/main.tf
-# Module to create AWS Organization and Organizational Units.
+# Module to create an AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
   feature_set = var.organization_features
@@ -189,4 +189,4 @@ output "custom_policies" {
 ### Assumptions:
 - The AWS Organization is being created from scratch.
 - Default values are provided for features, OUs, and services.
-- Custom policies are optional and can be defined as needed.
+- Custom policies are optional and can be added as needed.
