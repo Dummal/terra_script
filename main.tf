@@ -6,10 +6,10 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 4.0"
     }
   }
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -80,7 +80,7 @@ variable "organization_features" {
 variable "organizational_units" {
   description = "A list of organizational units to create within the AWS Organization."
   type        = list(string)
-  default     = ["Security", "AuditLog"]
+  default     = ["Security", "Audit Log"]
 }
 
 variable "tags" {
@@ -188,5 +188,5 @@ output "custom_policies" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
-- Custom policies are optional and can be defined as needed.
+- Default values are provided for features, OUs, and services.
+- Custom policies are optional and can be added as needed.
