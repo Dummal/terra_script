@@ -31,20 +31,18 @@ resource "aws_cloudtrail" "main" {
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = var.cloudtrail_s3_bucket_name
 
+  # Enable versioning for the bucket
   versioning {
     enabled = true
   }
 
+  # Enable server-side encryption
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
         sse_algorithm = "AES256"
       }
     }
-  }
-
-  lifecycle {
-    prevent_destroy = true
   }
 
   tags = var.default_tags
@@ -57,15 +55,6 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid       = "AWSCloudTrailAclCheck"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail_logs.arn
-      },
       {
         Sid       = "AWSCloudTrailWrite"
         Effect    = "Allow"
@@ -113,21 +102,26 @@ variable "default_tags" {
   description = "Default tags to apply to all resources"
   type        = map(string)
   default = {
-    Environment = "production"
-    Project     = "landingzone"
-    ManagedBy   = "terraform"
+    Environment = "LandingZone"
+    Project     = "Hello"
+    Owner       = "Hello"
   }
 }
 
 # Outputs
 output "cloudtrail_arn" {
-  description = "The ARN of the CloudTrail"
+  description = "ARN of the CloudTrail"
   value       = aws_cloudtrail.main.arn
 }
 
 output "cloudtrail_s3_bucket_name" {
-  description = "The name of the S3 bucket used for CloudTrail logs"
+  description = "Name of the S3 bucket used for CloudTrail logs"
   value       = aws_s3_bucket.cloudtrail_logs.bucket
+}
+
+output "cloudtrail_s3_bucket_arn" {
+  description = "ARN of the S3 bucket used for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.arn
 }
 ```
 
@@ -140,7 +134,8 @@ output "cloudtrail_s3_bucket_name" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled by default (`enable_multi_region = true`).
+- Multi-region support is enabled for CloudTrail as per the requirements.
 - AWS Organizations is not used, so no account management is included.
-- Centralized logging is not required, so logs are stored in a single S3 bucket.
+- Logging is centralized in a single S3 bucket for simplicity.
+- Default tags include `Environment`, `Project`, and `Owner` for resource identification.
 - Sensitive data like bucket names and CloudTrail names are parameterized for flexibility.
