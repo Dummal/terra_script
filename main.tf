@@ -7,7 +7,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = ">= 4.0.0"
     }
   }
 }
@@ -17,7 +17,7 @@ provider "aws" {
 }
 
 # Enable AWS CloudTrail for logging
-resource "aws_cloudtrail" "landing_zone_trail" {
+resource "aws_cloudtrail" "main" {
   name                          = "${var.organization_name}-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
@@ -29,10 +29,9 @@ resource "aws_cloudtrail" "landing_zone_trail" {
   }
 }
 
-# S3 bucket to store CloudTrail logs
+# S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = "${var.organization_name}-cloudtrail-logs"
-  acl    = "private"
 
   versioning {
     enabled = true
@@ -56,7 +55,7 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
 variable "organization_name" {
   description = "The name of your organization or project."
   type        = string
-  default     = "default-organization" # Replace with your organization name
+  default     = "default-org" # Replace with your organization name
 }
 
 variable "default_region" {
@@ -80,7 +79,7 @@ variable "environment" {
 # Outputs
 output "cloudtrail_name" {
   description = "The name of the AWS CloudTrail."
-  value       = aws_cloudtrail.landing_zone_trail.name
+  value       = aws_cloudtrail.main.name
 }
 
 output "cloudtrail_s3_bucket" {
@@ -98,11 +97,7 @@ output "cloudtrail_s3_bucket" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled for AWS CloudTrail.
-- AWS Organizations is not used for account management.
-- Logs are not centralized into a separate logging account.
-- Sensitive data like organization name and environment are passed as variables.
-
-### Notes:
-- Replace the default values in the `variables` block with your specific project details.
-- Ensure you have the necessary IAM permissions to create the resources.
+- Multi-region support is enabled for AWS CloudTrail as per the user input.
+- AWS Organizations is not used, so no account management is included.
+- Centralized logging is not required, so logs are stored in a single S3 bucket.
+- Sensitive data like usernames and email addresses are not directly used in this configuration.
