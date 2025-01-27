@@ -1,52 +1,47 @@
 ```hcl
 # main.tf
-# Terraform script to set up a basic AWS Landing Zone with multi-region support and AWS CloudTrail logging enabled.
+# This Terraform script sets up a multi-region AWS environment with CloudTrail enabled.
+# Assumptions:
+# - AWS Organizations is not used.
+# - Logs are not centralized across accounts.
+# - User-provided inputs are used for username and email.
 
 terraform {
-  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = "~> 4.0"
     }
   }
+  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
-  # Default region for the provider
   region = var.default_region
 }
 
 # Enable AWS CloudTrail for logging
-resource "aws_cloudtrail" "landing_zone_trail" {
+resource "aws_cloudtrail" "main" {
   name                          = "${var.project_name}-cloudtrail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = var.enable_multi_region
   enable_logging                = true
 
-  tags = var.default_tags
+  tags = {
+    Project = var.project_name
+    Owner   = var.username
+  }
 }
 
-# S3 bucket to store CloudTrail logs
+# S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = "${var.project_name}-cloudtrail-logs"
 
-  # Enable versioning for the bucket
-  versioning {
-    enabled = true
+  tags = {
+    Project = var.project_name
+    Owner   = var.username
   }
-
-  # Enable server-side encryption
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
-  tags = var.default_tags
 }
 
 # S3 bucket policy to allow CloudTrail to write logs
@@ -57,20 +52,8 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AWSCloudTrailAclCheck"
         Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action    = "s3:GetBucketAcl"
-        Resource  = aws_s3_bucket.cloudtrail_logs.arn
-      },
-      {
-        Sid       = "AWSCloudTrailWrite"
-        Effect    = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
+        Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
         Resource  = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
         Condition = {
@@ -87,35 +70,37 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
 variable "project_name" {
   description = "The name of the project or organization."
   type        = string
-  default     = "hello" # Default value based on user input
-}
-
-variable "default_region" {
-  description = "The default AWS region to deploy resources."
-  type        = string
-  default     = "us-east-1" # Default region
+  default     = "default-project" # Replace with a meaningful default if needed
 }
 
 variable "enable_multi_region" {
   description = "Enable multi-region support for CloudTrail."
   type        = bool
-  default     = true # Based on user input
+  default     = true
 }
 
-variable "default_tags" {
-  description = "Default tags to apply to all resources."
-  type        = map(string)
-  default = {
-    Project = "hello"
-    Owner   = "hello"
-    Email   = "hello@example.com"
-  }
+variable "username" {
+  description = "The username for the landing zone."
+  type        = string
+  default     = "default-user" # Replace with a meaningful default if needed
+}
+
+variable "email" {
+  description = "The email address for the landing zone."
+  type        = string
+  default     = "default@example.com" # Replace with a meaningful default if needed
+}
+
+variable "default_region" {
+  description = "The default AWS region to deploy resources."
+  type        = string
+  default     = "us-east-1"
 }
 
 # Outputs
 output "cloudtrail_name" {
-  description = "The name of the CloudTrail."
-  value       = aws_cloudtrail.landing_zone_trail.name
+  description = "The name of the CloudTrail instance."
+  value       = aws_cloudtrail.main.name
 }
 
 output "cloudtrail_s3_bucket" {
@@ -123,22 +108,21 @@ output "cloudtrail_s3_bucket" {
   value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 
-output "cloudtrail_arn" {
-  description = "The ARN of the CloudTrail."
-  value       = aws_cloudtrail.landing_zone_trail.arn
+output "cloudtrail_multi_region" {
+  description = "Indicates if multi-region support is enabled for CloudTrail."
+  value       = aws_cloudtrail.main.is_multi_region_trail
 }
 ```
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file if you want to override default values.
+2. Create a `variables.tf` file if you want to override the default values for variables.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
 6. Confirm the changes when prompted.
 
-### Key Assumptions:
-- Multi-region support is enabled for CloudTrail based on user input.
-- AWS Organizations is not used, so no account management is included.
-- Logs are not centralized into a logging account, as per user input.
-- Default values for project name, owner, and email are set to "hello" based on user input. Update these as needed.
+### Notes:
+- Replace default values in the `variables` block with actual values as needed.
+- Ensure the AWS credentials are configured in your environment before running the script.
+- This script assumes that AWS Organizations is not used and logs are not centralized across accounts. Adjust as needed for your use case.
