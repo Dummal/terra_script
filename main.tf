@@ -3,13 +3,13 @@
 # This Terraform script sets up an AWS Organization with modular configurations for features, OUs, policies, and tags.
 
 terraform {
-  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = "~> 4.0"
     }
   }
+  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -18,7 +18,7 @@ provider "aws" {
 
 # Module: AWS Organization
 module "aws_organization" {
-  source = "./modules/aws_organization"
+  source = "./modules/organization"
 
   organization_features = var.organization_features
   organizational_units  = var.organizational_units
@@ -70,7 +70,7 @@ variable "organization_features" {
 variable "organizational_units" {
   description = "A list of organizational units to create within the AWS Organization."
   type        = list(string)
-  default     = ["Security", "AuditLog"]
+  default     = ["Security", "Audit Log"]
 }
 
 variable "tags" {
@@ -101,7 +101,7 @@ variable "custom_policies" {
 ```
 
 ```hcl
-# modules/aws_organization/main.tf
+# modules/organization/main.tf
 # Module to create an AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
@@ -133,7 +133,7 @@ resource "aws_organizations_organization" "this" {
   feature_set = "ALL"
 }
 
-resource "aws_organizations_organization_service_access" "service_access" {
+resource "aws_organizations_service_access" "service" {
   for_each = toset(var.services)
 
   service_principal = each.value
@@ -162,7 +162,7 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/aws_organization`, `modules/service_access`, `modules/policies`).
+1. Save the main script in `main.tf` and the modules in their respective directories.
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
@@ -172,4 +172,4 @@ resource "aws_organizations_policy_attachment" "policy_attachment" {
 - The AWS Organization is being created from scratch.
 - Default features are set to "ALL".
 - Organizational Units and tags are provided as examples.
-- Custom policies are optional and can be defined in `custom_policies` variable.
+- Custom policies are optional and can be defined in the `custom_policies` variable.
