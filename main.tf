@@ -3,13 +3,13 @@
 # This Terraform script sets up an AWS Organization with modular configurations for features, OUs, policies, and tags.
 
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = ">= 4.0.0"
     }
   }
-  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -21,22 +21,17 @@ module "aws_organization" {
   source = "./modules/organization"
 
   organization_features = var.organization_features
+  policy_types          = var.policy_types
   organizational_units  = var.organizational_units
   tags                  = var.tags
 }
 
-# Module: Service Access
-module "service_access" {
-  source = "./modules/service_access"
+# Module: Custom Policies
+module "custom_policies" {
+  source = "./modules/custom_policies"
 
-  services = var.services
-}
-
-# Module: Policies
-module "policies" {
-  source = "./modules/policies"
-
-  custom_policies = var.custom_policies
+  create_custom_policies = var.create_custom_policies
+  policies               = var.policies
 }
 
 # Outputs
@@ -48,16 +43,6 @@ output "organization_id" {
 output "organizational_units" {
   value       = module.aws_organization.organizational_units
   description = "List of created Organizational Units."
-}
-
-output "enabled_services" {
-  value       = module.service_access.enabled_services
-  description = "List of AWS services enabled for the organization."
-}
-
-output "custom_policies" {
-  value       = module.policies.custom_policies
-  description = "List of custom policies created and attached."
 }
 ```
 
@@ -77,34 +62,58 @@ variable "organization_features" {
   default     = "ALL"
 }
 
-variable "organizational_units" {
-  description = "A list of organizational units to create within the AWS Organization."
+variable "policy_types" {
+  description = "List of policy types to enable in the organization (e.g., SERVICE_CONTROL_POLICY, TAG_POLICY)."
   type        = list(string)
-  default     = ["Security", "AuditLog"]
+  default     = ["SERVICE_CONTROL_POLICY"]
+}
+
+variable "organizational_units" {
+  description = "List of organizational units to create within the AWS Organization."
+  type        = list(object({
+    name = string
+    tags = map(string)
+  }))
+  default = [
+    {
+      name = "Security"
+      tags = {
+        Environment = "Production"
+        Purpose     = "Security"
+      }
+    },
+    {
+      name = "AuditLog"
+      tags = {
+        Environment = "Production"
+        Purpose     = "Audit"
+      }
+    }
+  ]
 }
 
 variable "tags" {
-  description = "Tags to assign to each organizational unit."
+  description = "Tags to apply to all resources created by this configuration."
   type        = map(string)
   default     = {
+    Project     = "AWS Organization Setup"
     Environment = "Production"
-    Purpose     = "Security"
   }
 }
 
-variable "services" {
-  description = "A list of AWS services to enable access for in the organization."
-  type        = list(string)
-  default     = ["cloudtrail.amazonaws.com", "config.amazonaws.com"]
+variable "create_custom_policies" {
+  description = "Whether to create custom policies for the organization."
+  type        = bool
+  default     = false
 }
 
-variable "custom_policies" {
-  description = "A list of custom policies to create and attach to the organization."
+variable "policies" {
+  description = "List of custom policies to create, including their name, purpose, content, and attachment targets."
   type = list(object({
-    name        = string
-    description = string
-    content     = string
-    target_id   = string
+    name    = string
+    purpose = string
+    content = string
+    targets = list(string)
   }))
   default = []
 }
@@ -112,18 +121,18 @@ variable "custom_policies" {
 
 ```hcl
 # modules/organization/main.tf
-# Module to create AWS Organization and Organizational Units.
+# Module to create AWS Organization, enable features, and create OUs.
 
 resource "aws_organizations_organization" "this" {
   feature_set = var.organization_features
 }
 
 resource "aws_organizations_organizational_unit" "ou" {
-  for_each = toset(var.organizational_units)
+  for_each = { for ou in var.organizational_units : ou.name => ou }
 
-  name      = each.value
+  name      = each.value.name
   parent_id = aws_organizations_organization.this.id
-  tags      = var.tags
+  tags      = each.value.tags
 }
 
 output "organization_id" {
@@ -131,56 +140,77 @@ output "organization_id" {
 }
 
 output "organizational_units" {
-  value = aws_organizations_organizational_unit.ou[*].name
+  value = aws_organizations_organizational_unit.ou
 }
 ```
 
 ```hcl
-# modules/service_access/main.tf
-# Module to enable service access for AWS Organization.
-
-resource "aws_organizations_organization" "this" {
-  feature_set = "ALL"
-}
-
-resource "aws_organizations_organization_service_access" "service_access" {
-  for_each = toset(var.services)
-
-  service_principal = each.value
-}
-
-output "enabled_services" {
-  value = aws_organizations_organization_service_access.service_access[*].service_principal
-}
-```
-
-```hcl
-# modules/policies/main.tf
-# Module to create and attach custom policies.
+# modules/custom_policies/main.tf
+# Module to create custom policies and attach them to targets.
 
 resource "aws_organizations_policy" "custom_policy" {
-  for_each = { for policy in var.custom_policies : policy.name => policy }
+  for_each = { for policy in var.policies : policy.name => policy }
 
-  name        = each.value.name
-  description = each.value.description
-  content     = each.value.content
-  type        = "SERVICE_CONTROL_POLICY"
+  name     = each.value.name
+  type     = "SERVICE_CONTROL_POLICY"
+  content  = each.value.content
+  tags     = var.tags
 }
 
 resource "aws_organizations_policy_attachment" "policy_attachment" {
-  for_each = { for policy in var.custom_policies : policy.name => policy }
+  for_each = { for policy in var.policies : policy.name => policy }
 
   policy_id = aws_organizations_policy.custom_policy[each.key].id
-  target_id = each.value.target_id
+  target_id = each.value.targets[0] # Assuming one target per policy for simplicity.
+}
+```
+
+```hcl
+# modules/organization/variables.tf
+variable "organization_features" {
+  description = "The features to enable for the AWS Organization."
+  type        = string
 }
 
-output "custom_policies" {
-  value = aws_organizations_policy.custom_policy[*].name
+variable "policy_types" {
+  description = "List of policy types to enable in the organization."
+  type        = list(string)
+}
+
+variable "organizational_units" {
+  description = "List of organizational units to create within the AWS Organization."
+  type        = list(object({
+    name = string
+    tags = map(string)
+  }))
+}
+```
+
+```hcl
+# modules/custom_policies/variables.tf
+variable "create_custom_policies" {
+  description = "Whether to create custom policies for the organization."
+  type        = bool
+}
+
+variable "policies" {
+  description = "List of custom policies to create, including their name, purpose, content, and attachment targets."
+  type = list(object({
+    name    = string
+    purpose = string
+    content = string
+    targets = list(string)
+  }))
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources created by this module."
+  type        = map(string)
 }
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/organization`, `modules/service_access`, `modules/policies`).
+1. Save the main script in `main.tf` and the modules in their respective directories (`modules/organization` and `modules/custom_policies`).
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
@@ -188,5 +218,5 @@ output "custom_policies" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
-- Custom policies are optional and can be defined as needed.
+- Custom policies are optional and can be added later.
+- Control Tower setup is not included, as it requires manual intervention.
