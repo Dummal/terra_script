@@ -1,13 +1,14 @@
 ```hcl
 # main.tf
-# This Terraform script creates an AWS Organizational Unit (OU) and applies Service Control Policies (SCPs) to it.
+# This Terraform script sets up an AWS Organizational Unit (OU) with optional Service Control Policies (SCPs).
 # Assumptions:
 # - AWS provider is used.
-# - SCPs and OU names are provided as variables for flexibility.
-# - Users or roles managing the OU are assumed to have IAM permissions.
+# - Users or roles managing the OU will have permissions defined externally.
+# - SCPs are optional and can be defined via variables.
 
 terraform {
   required_version = ">= 1.3.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -20,23 +21,19 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Create an Organizational Unit (OU) in AWS Organizations
+# Create an Organizational Unit (OU)
 resource "aws_organizations_organizational_unit" "example_ou" {
   name      = var.ou_name
   parent_id = var.parent_id
 
-  tags = {
-    Environment = var.environment
-    ManagedBy   = "Terraform"
-  }
+  tags = var.tags
 }
 
-# Apply Service Control Policies (SCPs) to the OU
+# Optional: Attach Service Control Policies (SCPs) to the OU
 resource "aws_organizations_policy_attachment" "scp_attachment" {
-  for_each = toset(var.scp_ids)
-
-  policy_id = each.value
-  target_id = aws_organizations_organizational_unit.example_ou.id
+  count      = length(var.scp_ids) > 0 ? length(var.scp_ids) : 0
+  policy_id  = var.scp_ids[count.index]
+  target_id  = aws_organizations_organizational_unit.example_ou.id
 }
 
 # Variables
@@ -52,36 +49,36 @@ variable "ou_name" {
 }
 
 variable "parent_id" {
-  description = "The ID of the parent organizational unit or root."
+  description = "The ID of the parent Organizational Unit or root."
   type        = string
 }
 
 variable "scp_ids" {
-  description = "A list of Service Control Policy (SCP) IDs to attach to the OU."
+  description = "List of Service Control Policy (SCP) IDs to attach to the OU."
   type        = list(string)
   default     = []
 }
 
-variable "environment" {
-  description = "The environment tag for the resources (e.g., dev, staging, prod)."
-  type        = string
-  default     = "dev"
+variable "tags" {
+  description = "Tags to apply to the Organizational Unit."
+  type        = map(string)
+  default     = {}
 }
 
 # Outputs
 output "ou_id" {
-  description = "The ID of the created Organizational Unit (OU)."
+  description = "The ID of the created Organizational Unit."
   value       = aws_organizations_organizational_unit.example_ou.id
 }
 
 output "ou_arn" {
-  description = "The ARN of the created Organizational Unit (OU)."
+  description = "The ARN of the created Organizational Unit."
   value       = aws_organizations_organizational_unit.example_ou.arn
 }
 
 # Instructions to Apply:
 # 1. Save this script in a file, e.g., `main.tf`.
-# 2. Create a `terraform.tfvars` file to define the required variables (e.g., ou_name, parent_id, scp_ids).
+# 2. Create a `terraform.tfvars` file to define the required variables (e.g., `ou_name`, `parent_id`).
 # 3. Initialize Terraform: `terraform init`.
 # 4. Review the plan: `terraform plan`.
 # 5. Apply the configuration: `terraform apply`.
@@ -94,10 +91,14 @@ aws_region = "us-east-1"
 ou_name    = "ExampleOU"
 parent_id  = "r-examplerootid"
 scp_ids    = ["p-examplepolicyid1", "p-examplepolicyid2"]
-environment = "prod"
+tags = {
+  Environment = "Production"
+  Team        = "DevOps"
+}
 ```
 
 ### Notes:
-1. Replace `parent_id` with the ID of the root or parent OU where the new OU should be created.
-2. Replace `scp_ids` with the IDs of the SCPs you want to attach to the OU.
-3. Ensure the AWS credentials used have sufficient permissions to manage AWS Organizations and SCPs.
+1. **Access Management**: The script assumes that users or roles managing the OU have the necessary permissions defined outside of this configuration.
+2. **Service Control Policies (SCPs)**: SCPs are optional. If no SCPs are provided, the `aws_organizations_policy_attachment` resource will not be created.
+3. **Tags**: Tags are optional but recommended for resource organization and cost tracking.
+4. **Parent ID**: Ensure the `parent_id` corresponds to a valid root or OU ID in your AWS Organization.
