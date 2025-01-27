@@ -1,13 +1,13 @@
 ```hcl
 # main.tf
-# Terraform script to create an AWS Organization with modular design and reusable configurations.
+# Terraform configuration for setting up an AWS Organization with modular design
 
 terraform {
   required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = ">= 4.0.0"
     }
   }
 }
@@ -26,15 +26,38 @@ module "aws_organization" {
   tags                  = var.tags
 }
 
-# Variables
+# Module to create custom policies
+module "custom_policies" {
+  source = "./modules/custom_policies"
+
+  create_custom_policies = var.create_custom_policies
+  policies               = var.policies
+}
+
+# Outputs
+output "organization_id" {
+  value       = module.aws_organization.organization_id
+  description = "The ID of the AWS Organization"
+}
+
+output "organizational_units" {
+  value       = module.aws_organization.organizational_units
+  description = "List of created Organizational Units"
+}
+```
+
+```hcl
+# variables.tf
+# Define variables for the AWS Organization setup
+
 variable "aws_region" {
-  description = "AWS region to deploy the resources"
+  description = "The AWS region to use for the provider"
   type        = string
   default     = "us-east-1"
 }
 
 variable "organization_features" {
-  description = "Features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
+  description = "The features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
   type        = string
   default     = "ALL"
 }
@@ -47,122 +70,116 @@ variable "policy_types" {
 
 variable "organizational_units" {
   description = "List of organizational units to create within the AWS Organization"
-  type        = list(object({
-    name = string
-    tags = map(string)
-  }))
-  default = [
-    {
-      name = "Security"
-      tags = {
-        Environment = "Production"
-        Purpose     = "Security"
-      }
-    },
-    {
-      name = "AuditLog"
-      tags = {
-        Environment = "Production"
-        Purpose     = "Audit"
-      }
-    }
-  ]
+  type        = list(string)
+  default     = ["Security", "Audit Log"]
 }
 
 variable "tags" {
-  description = "Global tags to apply to all resources"
+  description = "Tags to assign to each organizational unit"
   type        = map(string)
   default     = {
-    Project     = "AWS Organization Setup"
     Environment = "Production"
+    Purpose     = "Security"
   }
 }
 
-# Outputs
-output "organization_id" {
-  description = "The ID of the AWS Organization"
-  value       = module.aws_organization.organization_id
+variable "create_custom_policies" {
+  description = "Whether to create custom policies for the organization"
+  type        = bool
+  default     = false
 }
 
-output "organizational_units" {
-  description = "List of created organizational units"
-  value       = module.aws_organization.organizational_units
+variable "policies" {
+  description = "List of custom policies to create, including name, purpose, content, and attachment targets"
+  type = list(object({
+    name    = string
+    purpose = string
+    content = string
+    target  = string
+  }))
+  default = []
 }
 ```
 
 ```hcl
 # modules/aws_organization/main.tf
-# Module to create AWS Organization and associated resources.
+# Module to create AWS Organization and Organizational Units
 
 resource "aws_organizations_organization" "this" {
   feature_set = var.organization_features
-
-  enabled_policy_types = var.policy_types
 }
 
-resource "aws_organizations_organizational_unit" "ou" {
-  for_each = { for ou in var.organizational_units : ou.name => ou }
+resource "aws_organizations_policy_type" "this" {
+  for_each = toset(var.policy_types)
 
-  name      = each.value.name
-  parent_id = aws_organizations_organization.this.id
-  tags      = merge(var.tags, each.value.tags)
+  policy_type = each.value
+  root_id     = aws_organizations_organization.this.roots[0].id
 }
 
-# Outputs
+resource "aws_organizations_organizational_unit" "this" {
+  for_each = toset(var.organizational_units)
+
+  name = each.value
+  parent_id = aws_organizations_organization.this.roots[0].id
+
+  tags = var.tags
+}
+
 output "organization_id" {
-  description = "The ID of the AWS Organization"
-  value       = aws_organizations_organization.this.id
+  value = aws_organizations_organization.this.id
 }
 
 output "organizational_units" {
-  description = "List of created organizational units"
-  value = [
-    for ou in aws_organizations_organizational_unit.ou :
-    {
-      name = ou.name
-      id   = ou.id
-    }
-  ]
+  value = aws_organizations_organizational_unit.this[*].id
 }
 ```
 
 ```hcl
-# modules/aws_organization/variables.tf
-# Variables for the AWS Organization module.
+# modules/custom_policies/main.tf
+# Module to create custom policies and attach them to targets
 
-variable "organization_features" {
-  description = "Features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
-  type        = string
+resource "aws_organizations_policy" "this" {
+  count = var.create_custom_policies ? length(var.policies) : 0
+
+  name        = var.policies[count.index].name
+  description = var.policies[count.index].purpose
+  content     = var.policies[count.index].content
+  type        = "SERVICE_CONTROL_POLICY"
 }
 
-variable "policy_types" {
-  description = "List of policy types to enable in the organization (e.g., SERVICE_CONTROL_POLICY, TAG_POLICY)"
-  type        = list(string)
+resource "aws_organizations_policy_attachment" "this" {
+  count = var.create_custom_policies ? length(var.policies) : 0
+
+  policy_id = aws_organizations_policy.this[count.index].id
+  target_id = var.policies[count.index].target
+}
+```
+
+```hcl
+# outputs.tf
+# Outputs for the main configuration
+
+output "organization_id" {
+  value       = module.aws_organization.organization_id
+  description = "The ID of the AWS Organization"
 }
 
-variable "organizational_units" {
-  description = "List of organizational units to create within the AWS Organization"
-  type        = list(object({
-    name = string
-    tags = map(string)
-  }))
-}
-
-variable "tags" {
-  description = "Global tags to apply to all resources"
-  type        = map(string)
+output "organizational_units" {
+  value       = module.aws_organization.organizational_units
+  description = "List of created Organizational Units"
 }
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the module in `modules/aws_organization/`.
+1. Save the scripts in appropriate files (`main.tf`, `variables.tf`, `outputs.tf`, and module files).
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
 5. Confirm the changes when prompted.
 
 ### Assumptions:
-- The AWS Organization is being created from scratch.
 - Default features are set to `ALL`.
 - Default policy types include `SERVICE_CONTROL_POLICY`.
-- Organizational units and tags are customizable via variables.
+- Default organizational units are `Security` and `Audit Log`.
+- Tags are applied to all organizational units.
+- Custom policies are optional and can be defined as needed.
