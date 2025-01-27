@@ -8,10 +8,10 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 4.0"
     }
   }
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -45,6 +45,11 @@ output "organizational_units" {
   value       = module.aws_organization.organizational_units
   description = "List of created Organizational Units (OUs)."
 }
+
+output "custom_policies" {
+  value       = module.custom_policies.policy_ids
+  description = "List of custom policy IDs created."
+}
 ```
 
 ```hcl
@@ -52,7 +57,7 @@ output "organizational_units" {
 # Define variables for the AWS Organization setup.
 
 variable "aws_region" {
-  description = "The AWS region to use for the provider."
+  description = "The AWS region to deploy the resources."
   type        = string
   default     = "us-east-1"
 }
@@ -74,7 +79,7 @@ variable "tags" {
   type        = map(string)
   default     = {
     Environment = "Production"
-    Purpose     = "AWS Organization Management"
+    Purpose     = "AWS Organization Setup"
   }
 }
 
@@ -117,13 +122,33 @@ output "organization_id" {
 }
 
 output "organizational_units" {
-  value = aws_organizations_organizational_unit.ou[*].name
+  value = aws_organizations_organizational_unit.ou[*].id
+}
+```
+
+```hcl
+# modules/aws_organization/variables.tf
+# Variables for the AWS Organization module.
+
+variable "organization_features" {
+  description = "The features to enable for the AWS Organization."
+  type        = string
+}
+
+variable "organizational_units" {
+  description = "A list of organizational units (OUs) to create."
+  type        = list(string)
+}
+
+variable "tags" {
+  description = "Tags to assign to each organizational unit."
+  type        = map(string)
 }
 ```
 
 ```hcl
 # modules/custom_policies/main.tf
-# Module to create and attach custom policies to the AWS Organization.
+# Module to create and manage custom policies for the AWS Organization.
 
 resource "aws_organizations_policy" "custom_policy" {
   count = var.create_custom_policies ? length(var.policies) : 0
@@ -132,33 +157,37 @@ resource "aws_organizations_policy" "custom_policy" {
   description = var.policies[count.index].purpose
   content     = var.policies[count.index].content
   type        = "SERVICE_CONTROL_POLICY"
+
+  attachment_target_id = var.policies[count.index].target
 }
 
-resource "aws_organizations_policy_attachment" "policy_attachment" {
-  count = var.create_custom_policies ? length(var.policies) : 0
-
-  policy_id = aws_organizations_policy.custom_policy[count.index].id
-  target_id = var.policies[count.index].target
+output "policy_ids" {
+  value = aws_organizations_policy.custom_policy[*].id
 }
 ```
 
 ```hcl
-# outputs.tf
-# Outputs for the AWS Organization setup.
+# modules/custom_policies/variables.tf
+# Variables for the Custom Policies module.
 
-output "organization_id" {
-  value       = module.aws_organization.organization_id
-  description = "The ID of the AWS Organization."
+variable "create_custom_policies" {
+  description = "Whether to create custom policies for the organization."
+  type        = bool
 }
 
-output "organizational_units" {
-  value       = module.aws_organization.organizational_units
-  description = "List of created Organizational Units (OUs)."
+variable "policies" {
+  description = "A list of custom policies to create, including their names, purposes, and JSON content."
+  type = list(object({
+    name    = string
+    purpose = string
+    content = string
+    target  = string
+  }))
 }
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/aws_organization` and `modules/custom_policies`).
+1. Save the main script in `main.tf` and the modules in their respective directories.
 2. Initialize Terraform: `terraform init`.
 3. Review the plan: `terraform plan`.
 4. Apply the configuration: `terraform apply`.
@@ -166,6 +195,5 @@ output "organizational_units" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default features are set to "ALL".
-- Organizational Units and tags are customizable via variables.
-- Custom policies are optional and can be defined in JSON format.
+- Default values are provided for organizational units and tags.
+- Custom policies are optional and can be enabled by setting `create_custom_policies` to `true`.
