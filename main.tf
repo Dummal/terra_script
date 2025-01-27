@@ -31,8 +31,6 @@ resource "aws_cloudtrail" "main" {
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = var.cloudtrail_s3_bucket_name
 
-  acl = "private"
-
   versioning {
     enabled = true
   }
@@ -45,10 +43,14 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
     }
   }
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   tags = var.default_tags
 }
 
-# IAM policy for CloudTrail to write logs to S3
+# IAM policy for CloudTrail to write logs to the S3 bucket
 resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
   bucket = aws_s3_bucket.cloudtrail_logs.id
 
@@ -113,7 +115,7 @@ variable "default_tags" {
   default = {
     Environment = "production"
     Project     = "landingzone"
-    Owner       = "Hello"
+    ManagedBy   = "terraform"
   }
 }
 
@@ -138,8 +140,7 @@ output "cloudtrail_s3_bucket_name" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled for CloudTrail as per the user input.
+- Multi-region support is enabled by default (`enable_multi_region = true`).
 - AWS Organizations is not used, so no account management is included.
 - Centralized logging is not required, so logs are stored in a single S3 bucket.
-- Default tags include `Environment`, `Project`, and `Owner` for resource identification.
 - Sensitive data like bucket names and CloudTrail names are parameterized for flexibility.
