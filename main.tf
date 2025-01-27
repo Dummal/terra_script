@@ -1,87 +1,70 @@
-terraform {
-      required_version = ">= 1.3.0"
-      required_providers {
-        aws = {
-          source  = "hashicorp/aws"
-          version = ">= 4.0"
-        }
-      }
-    }
+resource "aws_organizations_organization" "this" {
+  aws_service_access_principals = [
+    "cloudtrail.amazonaws.com",
+    "config.amazonaws.com",
+    "sso.amazonaws.com",
+    "controltower.amazonaws.com",
+  ]
 
-    provider "aws" {
-      region = var.aws_region
-    }
+  feature_set = "ALL"
 
-    # Module to create AWS Organization
-    module "aws_organization" {
-      source = "./modules/aws_organization"
+  enabled_policy_types = [
+    "SERVICE_CONTROL_POLICY",
+    "TAG_POLICY"
+  ]
+}
 
-      organization_features = var.organization_features
-      policy_types          = var.policy_types
-      organizational_units  = var.organizational_units
-      tags                  = var.tags
-    }
+resource "aws_organizations_organizational_unit" "security" {
+  name      = "Security"
+  parent_id = aws_organizations_organization.this.roots[0].id
 
-    # Variables
-    variable "aws_region" {
-      description = "AWS region to deploy the resources"
-      type        = string
-      default     = "us-east-1"
-    }
+  tags = {
+    Environment = "Production"
+    Purpose     = "Security"
+  }
+}
 
-    variable "organization_features" {
-      description = "Features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
-      type        = string
-      default     = "ALL"
-    }
+resource "aws_organizations_organizational_unit" "audit_log" {
+  name      = "Audit Log"
+  parent_id = aws_organizations_organization.this.roots[0].id
 
-    variable "policy_types" {
-      description = "List of policy types to enable in the organization (e.g., SERVICE_CONTROL_POLICY, TAG_POLICY)"
-      type        = list(string)
-      default     = ["SERVICE_CONTROL_POLICY"]
-    }
+  tags = {
+    Environment = "Production"
+    Purpose     = "Audit"
+  }
+}
 
-    variable "organizational_units" {
-      description = "List of organizational units to create within the AWS Organization"
-      type        = list(object({
-        name = string
-        tags = map(string)
-      }))
-      default = [
-        {
-          name = "Security"
-          tags = {
-            Environment = "Production"
-            Purpose     = "Security"
-          }
-        },
-        {
-          name = "AuditLog"
-          tags = {
-            Environment = "Production"
-            Purpose     = "Audit"
+resource "aws_organizations_policy" "deny_root_user" {
+  name = "DenyRootUser"
+  content = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Deny"
+        Action = "*"
+        Resource = "*"
+        Condition = {
+          StringLike = {
+            "aws:PrincipalArn": [
+              "arn:aws:iam::*:root"
+            ]
           }
         }
-      ]
-    }
-
-    variable "tags" {
-      description = "Global tags to apply to all resources"
-      type        = map(string)
-      default     = {
-        Project     = "AWS Organization Setup"
-        Environment = "Production"
       }
-    }
+    ]
+  })
 
-    # Outputs
-    output "organization_id" {
-      description = "The ID of the AWS Organization"
-      value       = module.aws_organization.organization_id
-    }
+  depends_on = [aws_organizations_organization.this]
+}
 
-    output "organizational_units" {
-      description = "List of created organizational units"
-      value       = module.aws_organization.organizational_units
-    }
+resource "aws_organizations_policy_attachment" "deny_root_user" {
+  policy_id = aws_organizations_policy.deny_root_user.id
+  target_id = aws_organizations_organization.this.roots[0].id
+
+  depends_on = [aws_organizations_policy.deny_root_user]
+}
+
+# Note: Control Tower setup is not directly managed by Terraform.
+# You'll need to enable Control Tower manually in the AWS Console after this Terraform apply.
+
     
