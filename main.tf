@@ -3,13 +3,13 @@
 # This Terraform script sets up an AWS Organization with modular configurations for features, OUs, policies, and tags.
 
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = ">= 4.0"
     }
   }
-  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -112,7 +112,7 @@ variable "custom_policies" {
 
 ```hcl
 # modules/organization/main.tf
-# Module to create AWS Organization and Organizational Units.
+# Module to create an AWS Organization and Organizational Units.
 
 resource "aws_organizations_organization" "this" {
   feature_set = var.organization_features
@@ -188,5 +188,5 @@ output "custom_policies" {
 
 ### Assumptions:
 - The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
+- Default values are provided for features, OUs, and services.
 - Custom policies are optional and can be defined as needed.
