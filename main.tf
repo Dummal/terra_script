@@ -1,12 +1,13 @@
 ```hcl
-# Terraform script to create an AWS Organizational Unit (OU) with optional Service Control Policies (SCPs)
+# main.tf
+# Terraform script to create an AWS Organization with modular design and reusable configurations.
 
 terraform {
   required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0.0"
+      version = ">= 4.0"
     }
   }
 }
@@ -15,112 +16,153 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Module to create AWS Organization
+module "aws_organization" {
+  source = "./modules/aws_organization"
+
+  organization_features = var.organization_features
+  policy_types          = var.policy_types
+  organizational_units  = var.organizational_units
+  tags                  = var.tags
+}
+
 # Variables
 variable "aws_region" {
-  description = "The AWS region to use for the provider"
+  description = "AWS region to deploy the resources"
   type        = string
   default     = "us-east-1"
 }
 
-variable "organization_unit_name" {
-  description = "The name of the Organizational Unit (OU)"
+variable "organization_features" {
+  description = "Features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
   type        = string
+  default     = "ALL"
 }
 
-variable "parent_ou_id" {
-  description = "The ID of the parent Organizational Unit or root"
-  type        = string
+variable "policy_types" {
+  description = "List of policy types to enable in the organization (e.g., SERVICE_CONTROL_POLICY, TAG_POLICY)"
+  type        = list(string)
+  default     = ["SERVICE_CONTROL_POLICY"]
 }
 
-variable "scp_policies" {
-  description = "List of Service Control Policies (SCPs) to attach to the OU"
+variable "organizational_units" {
+  description = "List of organizational units to create within the AWS Organization"
   type        = list(object({
-    name        = string
-    description = string
-    content     = string
+    name = string
+    tags = map(string)
   }))
-  default = []
+  default = [
+    {
+      name = "Security"
+      tags = {
+        Environment = "Production"
+        Purpose     = "Security"
+      }
+    },
+    {
+      name = "AuditLog"
+      tags = {
+        Environment = "Production"
+        Purpose     = "Audit"
+      }
+    }
+  ]
 }
 
-# Resource: Create Organizational Unit
-resource "aws_organizations_organizational_unit" "this" {
-  name      = var.organization_unit_name
-  parent_id = var.parent_ou_id
-
-  tags = {
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
+  default = {
+    Project     = "AWS Organization Setup"
     Environment = "Production"
-    ManagedBy   = "Terraform"
   }
-}
-
-# Resource: Create and Attach SCPs
-resource "aws_organizations_policy" "scp" {
-  for_each    = { for policy in var.scp_policies : policy.name => policy }
-  name        = each.value.name
-  description = each.value.description
-  content     = each.value.content
-  type        = "SERVICE_CONTROL_POLICY"
-
-  tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
-}
-
-resource "aws_organizations_policy_attachment" "scp_attachment" {
-  for_each = { for policy in var.scp_policies : policy.name => policy }
-  policy_id = aws_organizations_policy.scp[each.key].id
-  target_id = aws_organizations_organizational_unit.this.id
 }
 
 # Outputs
-output "organizational_unit_id" {
-  description = "The ID of the created Organizational Unit"
-  value       = aws_organizations_organizational_unit.this.id
+output "organization_id" {
+  description = "The ID of the AWS Organization"
+  value       = module.aws_organization.organization_id
 }
 
-output "scp_policy_ids" {
-  description = "The IDs of the attached Service Control Policies (SCPs)"
-  value       = [for policy in aws_organizations_policy.scp : policy.id]
+output "organizational_units" {
+  description = "List of created organizational units"
+  value       = module.aws_organization.organizational_units
+}
+```
+
+```hcl
+# modules/aws_organization/main.tf
+# Module to create AWS Organization and associated resources.
+
+resource "aws_organizations_organization" "this" {
+  feature_set = var.organization_features
+
+  enabled_policy_types = var.policy_types
+}
+
+resource "aws_organizations_organizational_unit" "ou" {
+  for_each = { for ou in var.organizational_units : ou.name => ou }
+
+  name      = each.value.name
+  parent_id = aws_organizations_organization.this.id
+  tags      = merge(var.tags, each.value.tags)
+}
+
+# Outputs
+output "organization_id" {
+  description = "The ID of the AWS Organization"
+  value       = aws_organizations_organization.this.id
+}
+
+output "organizational_units" {
+  description = "List of created organizational units"
+  value = [
+    for ou in aws_organizations_organizational_unit.ou :
+    {
+      name = ou.name
+      id   = ou.id
+    }
+  ]
+}
+```
+
+```hcl
+# modules/aws_organization/variables.tf
+# Variables for the AWS Organization module.
+
+variable "organization_features" {
+  description = "Features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)"
+  type        = string
+}
+
+variable "policy_types" {
+  description = "List of policy types to enable in the organization (e.g., SERVICE_CONTROL_POLICY, TAG_POLICY)"
+  type        = list(string)
+}
+
+variable "organizational_units" {
+  description = "List of organizational units to create within the AWS Organization"
+  type        = list(object({
+    name = string
+    tags = map(string)
+  }))
+}
+
+variable "tags" {
+  description = "Tags to apply to all resources"
+  type        = map(string)
 }
 ```
 
 ### Instructions to Apply:
-1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file to define and customize variables if needed.
-3. Initialize Terraform: `terraform init`.
-4. Review the plan: `terraform plan`.
-5. Apply the configuration: `terraform apply`.
-6. Confirm the changes when prompted.
+1. Save the main script in `main.tf` and the module in `modules/aws_organization/`.
+2. Initialize Terraform: `terraform init`.
+3. Review the plan: `terraform plan`.
+4. Apply the configuration: `terraform apply`.
+5. Confirm the changes when prompted.
 
 ### Assumptions:
-- The `parent_ou_id` is provided and valid (e.g., the root ID or another OU ID).
-- SCPs are optional. If no SCPs are provided, only the OU will be created.
-- SCP content must be provided in JSON format as a string.
-
-### Example `terraform.tfvars`:
-```hcl
-aws_region = "us-east-1"
-organization_unit_name = "ExampleOU"
-parent_ou_id = "r-examplerootid"
-scp_policies = [
-  {
-    name        = "DenyAllExceptS3",
-    description = "Deny all actions except S3 access",
-    content     = <<EOT
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Deny",
-      "NotAction": "s3:*",
-      "Resource": "*"
-    }
-  ]
-}
-EOT
-  }
-]
-```
-
-This script is modular, reusable, and adheres to Terraform best practices. It allows for the creation of an AWS Organizational Unit and the optional attachment of Service Control Policies.
+- The AWS Organization is being created from scratch.
+- Default features are set to `ALL`.
+- Default policy type is `SERVICE_CONTROL_POLICY`.
+- Organizational units and tags are customizable via variables.
