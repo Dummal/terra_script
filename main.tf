@@ -3,13 +3,13 @@
 # Terraform script to create an AWS Organization with modular design and reusable configurations.
 
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = ">= 4.0.0"
     }
   }
-  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -70,7 +70,7 @@ variable "organizational_units" {
 }
 
 variable "tags" {
-  description = "Global tags to apply to all resources"
+  description = "Tags to apply to all resources"
   type        = map(string)
   default     = {
     Project     = "AWS Organization Setup"
@@ -149,7 +149,7 @@ variable "organizational_units" {
 }
 
 variable "tags" {
-  description = "Global tags to apply to all resources"
+  description = "Tags to apply to all resources"
   type        = map(string)
 }
 ```
@@ -164,5 +164,5 @@ variable "tags" {
 ### Assumptions:
 - The AWS Organization is being created from scratch.
 - Default features are set to `ALL`.
+- Default policy type is `SERVICE_CONTROL_POLICY`.
 - Organizational units and tags are customizable via variables.
-- Policies like `SERVICE_CONTROL_POLICY` are enabled by default.
