@@ -1,15 +1,15 @@
 ```hcl
 # main.tf
-# This Terraform script sets up a basic AWS Landing Zone with multi-region support and CloudTrail logging enabled.
+# Terraform configuration for setting up a multi-region AWS environment with CloudTrail logging enabled.
 
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.0"
+      version = ">= 4.0.0"
     }
   }
-  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -18,7 +18,7 @@ provider "aws" {
 
 # Enable AWS CloudTrail for logging
 resource "aws_cloudtrail" "main" {
-  name                          = "landingzone-cloudtrail"
+  name                          = var.cloudtrail_name
   s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
   is_multi_region_trail         = var.enable_multi_region
@@ -29,12 +29,14 @@ resource "aws_cloudtrail" "main" {
 
 # S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "${var.organization_name}-cloudtrail-logs"
+  bucket = var.cloudtrail_s3_bucket_name
 
+  # Enable versioning for the bucket
   versioning {
     enabled = true
   }
 
+  # Enable server-side encryption
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
@@ -43,75 +45,125 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
     }
   }
 
+  # Block public access
+  block_public_access {
+    block_public_acls       = true
+    block_public_policy     = true
+    ignore_public_acls      = true
+    restrict_public_buckets = true
+  }
+
   tags = var.default_tags
 }
 
-# IAM role for CloudTrail
+# IAM Role for CloudTrail to access S3 bucket
 resource "aws_iam_role" "cloudtrail_role" {
-  name = "cloudtrail-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = { Service = "cloudtrail.amazonaws.com" }
-      }
-    ]
-  })
+  name               = var.cloudtrail_iam_role_name
+  assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume_role_policy.json
 
   tags = var.default_tags
 }
 
-# Attach policy to the IAM role
+# IAM Policy for CloudTrail to access S3 bucket
+resource "aws_iam_policy" "cloudtrail_policy" {
+  name        = var.cloudtrail_iam_policy_name
+  description = "Policy for CloudTrail to access S3 bucket"
+  policy      = data.aws_iam_policy_document.cloudtrail_policy.json
+}
+
+# Attach IAM Policy to IAM Role
 resource "aws_iam_role_policy_attachment" "cloudtrail_policy_attachment" {
   role       = aws_iam_role.cloudtrail_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCloudTrailFullAccess"
+  policy_arn = aws_iam_policy.cloudtrail_policy.arn
+}
+
+# Data source for IAM assume role policy
+data "aws_iam_policy_document" "cloudtrail_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+}
+
+# Data source for IAM policy document
+data "aws_iam_policy_document" "cloudtrail_policy" {
+  statement {
+    actions = [
+      "s3:GetBucketAcl",
+      "s3:PutObject"
+    ]
+
+    resources = [
+      aws_s3_bucket.cloudtrail_logs.arn,
+      "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+    ]
+  }
 }
 
 # Variables
-variable "organization_name" {
-  description = "The name of your organization or project."
-  type        = string
-  default     = "default-org" # Replace with your organization name
-}
-
 variable "default_region" {
-  description = "The default AWS region to deploy resources."
+  description = "Default AWS region"
   type        = string
   default     = "us-east-1"
 }
 
+variable "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  type        = string
+  default     = "default-cloudtrail"
+}
+
+variable "cloudtrail_s3_bucket_name" {
+  description = "Name of the S3 bucket for CloudTrail logs"
+  type        = string
+  default     = "cloudtrail-logs-bucket"
+}
+
+variable "cloudtrail_iam_role_name" {
+  description = "Name of the IAM role for CloudTrail"
+  type        = string
+  default     = "cloudtrail-role"
+}
+
+variable "cloudtrail_iam_policy_name" {
+  description = "Name of the IAM policy for CloudTrail"
+  type        = string
+  default     = "cloudtrail-policy"
+}
+
 variable "enable_multi_region" {
-  description = "Enable multi-region support for CloudTrail."
+  description = "Enable multi-region support for CloudTrail"
   type        = bool
   default     = true
 }
 
 variable "default_tags" {
-  description = "Default tags to apply to all resources."
+  description = "Default tags for resources"
   type        = map(string)
   default = {
     Environment = "production"
-    ManagedBy   = "terraform"
+    Project     = "Hello"
   }
 }
 
 # Outputs
 output "cloudtrail_name" {
-  description = "The name of the CloudTrail instance."
+  description = "Name of the CloudTrail"
   value       = aws_cloudtrail.main.name
 }
 
 output "cloudtrail_s3_bucket" {
-  description = "The S3 bucket used for CloudTrail logs."
+  description = "S3 bucket for CloudTrail logs"
   value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 
-output "cloudtrail_role_arn" {
-  description = "The ARN of the IAM role used by CloudTrail."
-  value       = aws_iam_role.cloudtrail_role.arn
+output "cloudtrail_iam_role" {
+  description = "IAM role for CloudTrail"
+  value       = aws_iam_role.cloudtrail_role.name
 }
 ```
 
@@ -124,7 +176,8 @@ output "cloudtrail_role_arn" {
 6. Confirm the changes when prompted.
 
 ### Assumptions:
-- Multi-region support is enabled by default (`enable_multi_region = true`).
-- AWS Organizations is not used, so accounts are managed manually.
-- Logs are not centralized into a separate logging account.
-- Replace `default-org` with your organization name in the `organization_name` variable.
+- Multi-region support is enabled (`enable_multi_region = true`).
+- AWS Organizations is not used.
+- Centralized logging is not required.
+- Default tags are applied to all resources for better management.
+- Sensitive data like bucket names and IAM role names are parameterized.
