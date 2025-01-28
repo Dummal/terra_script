@@ -1,136 +1,82 @@
-```hcl
-# main.tf
-# Terraform script to set up an AWS Landing Zone with AWS Organizations and centralized logging.
-
-terraform {
-  required_version = ">= 1.3.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 4.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-
-# Module: AWS Organizations
-module "aws_organizations" {
-  source = "./modules/aws_organizations"
-
-  organization_master_account_email = var.organization_master_account_email
-  organization_master_account_name  = var.organization_master_account_name
-  tags                              = var.default_tags
-}
-
-# Module: Centralized Logging
-module "centralized_logging" {
-  source = "./modules/centralized_logging"
-
-  logging_account_email = var.logging_account_email
-  logging_account_name  = var.logging_account_name
-  tags                  = var.default_tags
-}
-
-# Variables
-variable "aws_region" {
-  description = "The AWS region to deploy resources in."
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "organization_master_account_email" {
-  description = "Email address for the AWS Organizations master account."
-  type        = string
-}
-
-variable "organization_master_account_name" {
-  description = "Name for the AWS Organizations master account."
-  type        = string
-}
-
-variable "logging_account_email" {
-  description = "Email address for the centralized logging account."
-  type        = string
-}
-
-variable "logging_account_name" {
-  description = "Name for the centralized logging account."
-  type        = string
-}
-
-variable "default_tags" {
-  description = "Default tags to apply to all resources."
-  type        = map(string)
-  default = {
-    Environment = "production"
-    Project     = "LandingZone"
-  }
-}
-
-# Outputs
-output "organization_id" {
-  description = "The ID of the AWS Organization."
-  value       = module.aws_organizations.organization_id
-}
-
-output "logging_account_id" {
-  description = "The ID of the centralized logging account."
-  value       = module.centralized_logging.logging_account_id
-}
-```
-
-### Module: AWS Organizations (`modules/aws_organizations/main.tf`)
-```hcl
-resource "aws_organizations_organization" "this" {
+resource "aws_organizations_organization" "org" {
   feature_set = "ALL"
 }
 
-resource "aws_organizations_account" "master_account" {
-  email = var.organization_master_account_email
-  name  = var.organization_master_account_name
-  role_name = "OrganizationAccountAccessRole"
+resource "aws_organizations_organizational_unit" "ou" {
+  for_each = toset(var.organizational_units)
 
-  tags = var.tags
+  name      = each.value
+  parent_id = aws_organizations_organization.org.roots[0].id
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
+
+resource "aws_iam_role" "aft_execution_role" {
+  name = "aft-execution-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+
+resource "aws_iam_policy" "aft_execution_policy" {
+  name        = "aft-execution-policy"
+  description = "Policy for AFT Lambda execution role."
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "logs:*"
+        Resource = "*"
+      }
+
+resource "aws_iam_role_policy_attachment" "aft_execution_attach" {
+  role       = aws_iam_role.aft_execution_role.name
+  policy_arn = aws_iam_policy.aft_execution_policy.arn
 }
 
-output "organization_id" {
-  description = "The ID of the AWS Organization."
-  value       = aws_organizations_organization.this.id
-}
-```
+resource "aws_s3_bucket" "aft_logs" {
+  bucket = var.aft_logs_bucket_name
 
-### Module: Centralized Logging (`modules/centralized_logging/main.tf`)
-```hcl
-resource "aws_organizations_account" "logging_account" {
-  email = var.logging_account_email
-  name  = var.logging_account_name
-  role_name = "LoggingAccountAccessRole"
+  versioning {
+    enabled = true
+  }
 
-  tags = var.tags
-}
+resource "aws_kms_key" "aft_key" {
+  description             = "KMS key for AFT resources"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
 
-output "logging_account_id" {
-  description = "The ID of the centralized logging account."
-  value       = aws_organizations_account.logging_account.id
-}
-```
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${var.master_account_id}
 
-### Instructions to Apply
-1. Save the main script in `main.tf` and the module scripts in their respective directories (`modules/aws_organizations` and `modules/centralized_logging`).
-2. Create a `variables.tf` file to define the required variables.
-3. Run the following commands:
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-4. Confirm the changes when prompted.
+resource "aws_sns_topic" "aft_notifications" {
+  name = "aft-notifications"
 
-### Assumptions
-- AWS Organizations is enabled in the account.
-- Centralized logging is implemented using a dedicated account.
-- Email addresses and account names are provided as inputs.
-- Default tags are applied to all resources for better management.
+  kms_master_key_id = aws_kms_key.aft_key.arn
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
+
+resource "aws_dynamodb_table" "aft_requests" {
+  name           = "aft-requests"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "id"
+  point_in_time_recovery {
+    enabled = true
+  }
