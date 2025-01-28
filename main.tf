@@ -1,6 +1,6 @@
 ```hcl
 # main.tf
-# This Terraform script sets up an AWS Organization with modular configurations for features, OUs, policies, and tags.
+# Terraform script to set up a basic AWS Landing Zone with multi-region support and AWS CloudTrail logging enabled.
 
 terraform {
   required_version = ">= 1.3.0"
@@ -13,177 +13,163 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = var.default_region
 }
 
-# Module: AWS Organization
-module "aws_organization" {
-  source = "./modules/aws_organization"
+# Enable AWS CloudTrail for logging
+resource "aws_cloudtrail" "main" {
+  name                          = var.cloudtrail_name
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
+  include_global_service_events = true
+  is_multi_region_trail         = var.enable_multi_region
+  enable_logging                = true
 
-  organization_features = var.organization_features
-  organizational_units  = var.organizational_units
-  tags                  = var.tags
+  tags = var.default_tags
 }
 
-# Module: Service Access
-module "service_access" {
-  source = "./modules/service_access"
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket = var.cloudtrail_s3_bucket_name
 
-  services = var.services
+  # Enable versioning for the bucket
+  versioning {
+    enabled = true
+  }
+
+  # Enable server-side encryption
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = var.default_tags
 }
 
-# Module: Policies
-module "policies" {
-  source = "./modules/policies"
+# IAM role for CloudTrail
+resource "aws_iam_role" "cloudtrail_role" {
+  name               = var.cloudtrail_iam_role_name
+  assume_role_policy = data.aws_iam_policy_document.cloudtrail_assume_role_policy.json
 
-  custom_policies = var.custom_policies
+  tags = var.default_tags
 }
 
-# Outputs
-output "organization_id" {
-  value       = module.aws_organization.organization_id
-  description = "The ID of the AWS Organization."
+# IAM policy for CloudTrail
+resource "aws_iam_policy" "cloudtrail_policy" {
+  name        = var.cloudtrail_iam_policy_name
+  description = "Policy for CloudTrail to access S3 bucket and logs"
+  policy      = data.aws_iam_policy_document.cloudtrail_policy.json
 }
 
-output "organizational_units" {
-  value       = module.aws_organization.organizational_units
-  description = "The list of created Organizational Units."
+# Attach the policy to the role
+resource "aws_iam_role_policy_attachment" "cloudtrail_policy_attachment" {
+  role       = aws_iam_role.cloudtrail_role.name
+  policy_arn = aws_iam_policy.cloudtrail_policy.arn
 }
-```
 
-```hcl
-# variables.tf
-# Define variables for the AWS Organization setup.
+# Data source for IAM assume role policy
+data "aws_iam_policy_document" "cloudtrail_assume_role_policy" {
+  statement {
+    actions = ["sts:AssumeRole"]
 
-variable "aws_region" {
-  description = "The AWS region to use for the provider."
+    principals {
+      type        = "Service"
+      identifiers = ["cloudtrail.amazonaws.com"]
+    }
+  }
+}
+
+# Data source for IAM policy document
+data "aws_iam_policy_document" "cloudtrail_policy" {
+  statement {
+    actions = [
+      "s3:GetBucketAcl",
+      "s3:PutObject"
+    ]
+
+    resources = [
+      aws_s3_bucket.cloudtrail_logs.arn,
+      "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+    ]
+  }
+}
+
+# Variables
+variable "default_region" {
+  description = "Default AWS region"
   type        = string
   default     = "us-east-1"
 }
 
-variable "organization_features" {
-  description = "The features to enable for the AWS Organization (e.g., ALL or CONSOLIDATED_BILLING)."
+variable "cloudtrail_name" {
+  description = "Name of the CloudTrail"
   type        = string
-  default     = "ALL"
+  default     = "landingzone-cloudtrail"
 }
 
-variable "organizational_units" {
-  description = "A list of Organizational Units to create within the AWS Organization."
-  type        = list(string)
-  default     = ["Security", "AuditLog"]
+variable "cloudtrail_s3_bucket_name" {
+  description = "Name of the S3 bucket for CloudTrail logs"
+  type        = string
+  default     = "landingzone-cloudtrail-logs"
 }
 
-variable "tags" {
-  description = "Tags to assign to each Organizational Unit."
+variable "cloudtrail_iam_role_name" {
+  description = "Name of the IAM role for CloudTrail"
+  type        = string
+  default     = "landingzone-cloudtrail-role"
+}
+
+variable "cloudtrail_iam_policy_name" {
+  description = "Name of the IAM policy for CloudTrail"
+  type        = string
+  default     = "landingzone-cloudtrail-policy"
+}
+
+variable "enable_multi_region" {
+  description = "Enable multi-region support for CloudTrail"
+  type        = bool
+  default     = true
+}
+
+variable "default_tags" {
+  description = "Default tags to apply to all resources"
   type        = map(string)
-  default     = {
-    Environment = "Production"
-    Purpose     = "Security"
+  default = {
+    Environment = "production"
+    Project     = "landingzone"
   }
 }
 
-variable "services" {
-  description = "A list of AWS services to grant access to the organization."
-  type        = list(string)
-  default     = ["cloudtrail.amazonaws.com", "config.amazonaws.com"]
+# Outputs
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  value       = aws_cloudtrail.main.name
 }
 
-variable "custom_policies" {
-  description = "A list of custom policies to create and their details."
-  type = list(object({
-    name        = string
-    description = string
-    content     = string
-    target_id   = string
-  }))
-  default = []
-}
-```
-
-```hcl
-# outputs.tf
-# Define outputs for the AWS Organization setup.
-
-output "organization_id" {
-  value       = module.aws_organization.organization_id
-  description = "The ID of the AWS Organization."
+output "cloudtrail_s3_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 
-output "organizational_units" {
-  value       = module.aws_organization.organizational_units
-  description = "The list of created Organizational Units."
-}
-```
-
-```hcl
-# modules/aws_organization/main.tf
-# Module to create an AWS Organization and Organizational Units.
-
-resource "aws_organizations_organization" "this" {
-  feature_set = var.organization_features
-}
-
-resource "aws_organizations_organizational_unit" "ou" {
-  for_each = toset(var.organizational_units)
-
-  name      = each.value
-  parent_id = aws_organizations_organization.this.id
-  tags      = var.tags
-}
-
-output "organization_id" {
-  value = aws_organizations_organization.this.id
-}
-
-output "organizational_units" {
-  value = aws_organizations_organizational_unit.ou[*].name
-}
-```
-
-```hcl
-# modules/service_access/main.tf
-# Module to enable service access for AWS Organization.
-
-resource "aws_organizations_organization" "this" {
-  feature_set = "ALL"
-}
-
-resource "aws_organizations_organization_service_access" "service_access" {
-  for_each = toset(var.services)
-
-  service_principal = each.value
-}
-```
-
-```hcl
-# modules/policies/main.tf
-# Module to create and attach custom policies.
-
-resource "aws_organizations_policy" "custom_policy" {
-  for_each = { for policy in var.custom_policies : policy.name => policy }
-
-  name        = each.value.name
-  description = each.value.description
-  content     = each.value.content
-  type        = "SERVICE_CONTROL_POLICY"
-}
-
-resource "aws_organizations_policy_attachment" "policy_attachment" {
-  for_each = { for policy in var.custom_policies : policy.name => policy }
-
-  policy_id = aws_organizations_policy.custom_policy[each.key].id
-  target_id = each.value.target_id
+output "cloudtrail_iam_role" {
+  description = "IAM role for CloudTrail"
+  value       = aws_iam_role.cloudtrail_role.name
 }
 ```
 
 ### Instructions to Apply:
-1. Save the main script in `main.tf` and the modules in their respective directories (`modules/aws_organization`, `modules/service_access`, `modules/policies`).
-2. Initialize Terraform: `terraform init`.
-3. Review the plan: `terraform plan`.
-4. Apply the configuration: `terraform apply`.
-5. Confirm the changes when prompted.
+1. Save the script in a file, e.g., `main.tf`.
+2. Create a `variables.tf` file if you want to override any default values.
+3. Initialize Terraform: `terraform init`.
+4. Review the plan: `terraform plan`.
+5. Apply the configuration: `terraform apply`.
+6. Confirm the changes when prompted.
 
 ### Assumptions:
-- The AWS Organization is being created from scratch.
-- Default values are provided for features, OUs, and tags.
-- Custom policies are optional and can be defined as needed.
+- Multi-region support is enabled (`enable_multi_region = true`).
+- AWS Organizations is not used.
+- Logs are not centralized into a separate logging account.
+- Default region is `us-east-1`.
+- Sensitive data like bucket names and IAM role names are parameterized for flexibility.
