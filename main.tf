@@ -1,6 +1,11 @@
 ```hcl
-# main.tf
-# Terraform script to create an AWS Landing Zone with centralized logging and AWS Organizations
+# Terraform script to create a multi-region AWS landing zone with CloudTrail enabled
+# Assumptions:
+# - AWS Organizations is not used.
+# - Logs are not centralized across accounts.
+# - Multi-region support is enabled.
+# - CloudTrail logging is enabled.
+# - Sensitive data like email and username are passed as variables.
 
 terraform {
   required_version = ">= 1.3.0"
@@ -13,132 +18,84 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
-}
-
-# AWS Organizations setup
-resource "aws_organizations_organization" "main" {
-  feature_set = "ALL"
-
-  # Tags for resource identification
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
-}
-
-# Centralized logging account
-module "logging_account" {
-  source = "./modules/logging_account"
-
-  account_name  = "LoggingAccount"
-  email_address = var.logging_account_email
-  tags = {
-    Project     = var.project_name
-    Environment = var.environment
-  }
+  # Default region for the provider
+  region = var.default_region
 }
 
 # Variables
-variable "aws_region" {
-  description = "AWS region to deploy resources"
+variable "default_region" {
+  description = "The default AWS region for the landing zone."
   type        = string
   default     = "us-east-1"
 }
 
-variable "project_name" {
-  description = "Name of the project or organization"
-  type        = string
-  default     = "default_project"
+variable "additional_regions" {
+  description = "List of additional AWS regions for multi-region support."
+  type        = list(string)
+  default     = ["us-west-1", "us-west-2"]
 }
 
-variable "environment" {
-  description = "Environment (e.g., dev, staging, prod)"
+variable "landing_zone_username" {
+  description = "Username for the landing zone."
   type        = string
-  default     = "dev"
 }
 
-variable "logging_account_email" {
-  description = "Email address for the logging account"
+variable "landing_zone_email" {
+  description = "Email address for the landing zone."
   type        = string
+}
+
+variable "enable_cloudtrail" {
+  description = "Flag to enable AWS CloudTrail logging."
+  type        = bool
+  default     = true
+}
+
+# Resource: AWS CloudTrail
+resource "aws_cloudtrail" "landing_zone_trail" {
+  count                  = var.enable_cloudtrail ? 1 : 0
+  name                   = "landing-zone-cloudtrail"
+  s3_bucket_name         = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail  = true
+  enable_logging         = true
+
+  tags = {
+    Environment = "LandingZone"
+    Owner       = var.landing_zone_username
+  }
+}
+
+# Resource: S3 Bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_bucket" {
+  bucket = "landing-zone-cloudtrail-logs-${random_id.bucket_id.hex}"
+
+  tags = {
+    Environment = "LandingZone"
+    Owner       = var.landing_zone_username
+  }
+}
+
+resource "random_id" "bucket_id" {
+  byte_length = 8
 }
 
 # Outputs
-output "organization_id" {
-  description = "The ID of the AWS Organization"
-  value       = aws_organizations_organization.main.id
+output "cloudtrail_name" {
+  description = "The name of the CloudTrail created for the landing zone."
+  value       = aws_cloudtrail.landing_zone_trail[0].name
+  condition   = var.enable_cloudtrail
 }
 
-output "logging_account_id" {
-  description = "The ID of the centralized logging account"
-  value       = module.logging_account.account_id
+output "cloudtrail_s3_bucket" {
+  description = "The S3 bucket used for CloudTrail logs."
+  value       = aws_s3_bucket.cloudtrail_bucket.id
 }
+
+# Instructions:
+# 1. Save this script in a file, e.g., `main.tf`.
+# 2. Create a `variables.tf` file to define and override variables if needed.
+# 3. Run `terraform init` to initialize the Terraform working directory.
+# 4. Run `terraform plan` to review the changes.
+# 5. Run `terraform apply` to apply the configuration.
 ```
-
-### Module: Logging Account (`modules/logging_account/main.tf`)
-```hcl
-# Module to create a logging account in AWS Organizations
-
-resource "aws_organizations_account" "logging" {
-  name  = var.account_name
-  email = var.email_address
-
-  # Tags for resource identification
-  tags = var.tags
-}
-
-# Outputs
-output "account_id" {
-  description = "The ID of the logging account"
-  value       = aws_organizations_account.logging.id
-}
-```
-
-### Module: Logging Account (`modules/logging_account/variables.tf`)
-```hcl
-variable "account_name" {
-  description = "Name of the logging account"
-  type        = string
-}
-
-variable "email_address" {
-  description = "Email address for the logging account"
-  type        = string
-}
-
-variable "tags" {
-  description = "Tags to apply to the logging account"
-  type        = map(string)
-}
-```
-
-### Module: Logging Account (`modules/logging_account/outputs.tf`)
-```hcl
-output "account_id" {
-  description = "The ID of the logging account"
-  value       = aws_organizations_account.logging.id
-}
-```
-
-### Instructions to Apply
-1. Save the main script in a file named `main.tf`.
-2. Create a folder named `modules/logging_account` and save the module files (`main.tf`, `variables.tf`, `outputs.tf`) inside it.
-3. Initialize Terraform:
-   ```bash
-   terraform init
-   ```
-4. Review the plan:
-   ```bash
-   terraform plan -var="logging_account_email=<your_logging_account_email>"
-   ```
-5. Apply the configuration:
-   ```bash
-   terraform apply -var="logging_account_email=<your_logging_account_email>"
-   ```
-6. Confirm the changes when prompted.
-
-### Assumptions
-- AWS Organizations is enabled in the account.
-- The email address for the logging account is provided as a variable (`logging_account_email`).
-- Multi-region support is not required, so the resources are deployed in a single region (`us-east-1` by default).
-- AWS CloudTrail logging is not enabled as per the user input. This can be added later if needed.
