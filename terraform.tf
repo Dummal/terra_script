@@ -1,3 +1,4 @@
+ 
 aws_region             = "us-west-2"
 enable_control_tower   = true
 master_account_email   = "lets.talk.about.2023@gmail.com"

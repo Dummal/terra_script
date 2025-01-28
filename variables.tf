@@ -15,7 +15,7 @@ variable "master_account_id" {
 }
 
 variable "organizational_units" {
-  description = "List of Organizational Units (OUs) to create"
+  description = "List of Organizational Units to create"
   type        = list(string)
   default     = ["Security", "Audit Log"]
 }
@@ -24,11 +24,3 @@ variable "aft_logs_bucket_name" {
   description = "Name of the S3 bucket for AFT logs"
   type        = string
 }
-
-variable "tags" {
-  description = "Tags to apply to all resources"
-  type        = map(string)
-  default = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
