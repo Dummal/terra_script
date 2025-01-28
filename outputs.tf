@@ -1,9 +1,9 @@
 output "s3_bucket_name" {
-  value       = aws_s3_bucket.log_bucket.bucket
   description = "The name of the S3 bucket for logs"
+  value       = aws_s3_bucket.aft_logs.id
 }
 
 output "kms_key_arn" {
-  value       = aws_kms_key.log_encryption_key.arn
   description = "The ARN of the KMS key used for encryption"
+  value       = aws_kms_key.aft_logs_kms_key.arn
 }
