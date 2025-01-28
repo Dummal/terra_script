@@ -31,8 +31,19 @@ resource "aws_cloudtrail" "landing_zone_trail" {
 
 # S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket = "${var.project_name}-cloudtrail-logs-${random_string.suffix.result}"
-  acl    = "private"
+  bucket = "${var.project_name}-cloudtrail-logs"
+
+  versioning {
+    enabled = true
+  }
+
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
 
   tags = {
     Environment = var.environment
@@ -40,64 +51,90 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
   }
 }
 
-# Random string to ensure unique bucket name
-resource "random_string" "suffix" {
-  length  = 6
-  special = false
+# IAM role for CloudTrail
+resource "aws_iam_role" "cloudtrail_role" {
+  name = "${var.project_name}-cloudtrail-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# Attach policy to the IAM role
+resource "aws_iam_role_policy_attachment" "cloudtrail_policy_attachment" {
+  role       = aws_iam_role.cloudtrail_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCloudTrailFullAccess"
 }
 
 # Variables
 variable "project_name" {
-  description = "The name of the project or organization."
+  description = "Name of the project or organization"
   type        = string
-  default     = "default-project" # Replace with your project name
+  default     = "hello" # Default value based on user input
 }
 
 variable "default_region" {
-  description = "The default AWS region to deploy resources."
+  description = "Default AWS region"
   type        = string
   default     = "us-east-1"
 }
 
 variable "enable_multi_region" {
-  description = "Enable multi-region support for AWS CloudTrail."
+  description = "Enable multi-region support for CloudTrail"
   type        = bool
   default     = true
 }
 
 variable "environment" {
-  description = "The environment for the resources (e.g., dev, staging, prod)."
+  description = "Environment (e.g., dev, staging, prod)"
   type        = string
-  default     = "dev"
+  default     = "production"
 }
 
 # Outputs
 output "cloudtrail_name" {
-  description = "The name of the AWS CloudTrail."
+  description = "Name of the CloudTrail"
   value       = aws_cloudtrail.landing_zone_trail.name
 }
 
 output "cloudtrail_s3_bucket" {
-  description = "The S3 bucket used for CloudTrail logs."
+  description = "S3 bucket for CloudTrail logs"
   value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 
-# Instructions:
-# 1. Save this script in a file, e.g., `main.tf`.
-# 2. Create a `variables.tf` file if you want to override default values.
-# 3. Run `terraform init` to initialize the Terraform working directory.
-# 4. Run `terraform plan` to review the changes.
-# 5. Run `terraform apply` to apply the configuration.
+output "cloudtrail_role_arn" {
+  description = "IAM Role ARN for CloudTrail"
+  value       = aws_iam_role.cloudtrail_role.arn
+}
 ```
 
+### Instructions to Apply:
+1. Save the script in a file, e.g., `main.tf`.
+2. Create a `variables.tf` file if you want to override the default values for variables.
+3. Initialize Terraform: `terraform init`.
+4. Review the plan: `terraform plan`.
+5. Apply the configuration: `terraform apply`.
+6. Confirm the changes when prompted.
+
 ### Assumptions:
-1. **Multi-region support**: Enabled by default (`enable_multi_region = true`).
-2. **AWS Organizations**: Not used, as per the user input.
-3. **Centralized logging**: Not implemented, as per the user input.
-4. **Sensitive data**: No sensitive data is hardcoded; variables are used for customization.
-5. **Project name**: Defaulted to `default-project` but can be overridden via variables.
+- Multi-region support is enabled (`enable_multi_region = true`).
+- AWS Organizations is not used, so accounts are managed manually.
+- CloudTrail logs are stored in an S3 bucket with server-side encryption enabled.
+- The project name is set to "hello" as a default value based on user input.
+- The environment is set to "production" by default.
 
 ### Notes:
-- The script creates an S3 bucket for CloudTrail logs with a unique name using a random string suffix.
-- Tags are added to resources for better management and identification.
-- The script is modular and can be extended further by creating separate modules for additional resources.
+- Ensure you have the necessary permissions to create the resources in your AWS account.
+- Update the `default_region` variable if you want to deploy in a region other than `us-east-1`.
