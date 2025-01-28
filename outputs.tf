@@ -1,9 +1,9 @@
-output "cloudtrail_name" {
-  description = "The name of the CloudTrail"
-  value       = aws_cloudtrail.landing_zone_trail.name
+output "s3_bucket_name" {
+  value       = aws_s3_bucket.log_bucket.bucket
+  description = "The name of the S3 bucket for logs"
 }
 
-output "cloudtrail_s3_bucket" {
-  description = "The name of the S3 bucket used for CloudTrail logs"
-  value       = aws_s3_bucket.cloudtrail_logs.bucket
+output "kms_key_arn" {
+  value       = aws_kms_key.log_encryption_key.arn
+  description = "The ARN of the KMS key used for encryption"
 }

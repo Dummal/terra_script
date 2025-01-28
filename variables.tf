@@ -1,25 +1,16 @@
 variable "aws_region" {
-  description = "AWS region to deploy resources"
+  description = "The AWS region to deploy resources in"
   type        = string
   default     = "us-east-1"
 }
 
-variable "cloudtrail_name" {
-  description = "Name of the CloudTrail"
+variable "environment" {
+  description = "The environment for the resources (e.g., dev, staging, prod)"
   type        = string
-  default     = "landing-zone-cloudtrail"
+  default     = "dev"
 }
 
-variable "cloudtrail_s3_bucket_name" {
-  description = "Name of the S3 bucket for CloudTrail logs"
+variable "s3_bucket_name" {
+  description = "The name of the S3 bucket for logs"
   type        = string
-  default     = "landing-zone-cloudtrail-logs"
 }
-
-variable "default_tags" {
-  description = "Default tags to apply to all resources"
-  type        = map(string)
-  default = {
-    Environment = "production"
-    Project     = "landing-zone"
-  }
