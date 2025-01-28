@@ -1,40 +1,32 @@
 variable "aws_region" {
-  description = "The AWS region to deploy resources in."
+  description = "The AWS region to deploy resources in"
   type        = string
   default     = "us-west-2"
 }
 
-variable "enable_control_tower" {
-  description = "Flag to enable AWS Control Tower."
-  type        = bool
-  default     = true
-}
-
 variable "master_account_email" {
-  description = "The email address for the master account."
+  description = "Email address for the master account"
   type        = string
 }
 
 variable "master_account_id" {
-  description = "The AWS account ID of the master account."
+  description = "AWS Account ID for the master account"
   type        = string
 }
 
 variable "organizational_units" {
-  description = "A map of Organizational Units to create."
-  type        = map(string)
-  default = {
-    "Security"  = "Environment: Production, Purpose: Security"
-    "Audit Log" = "Environment: Production, Purpose: Audit"
-  }
+  description = "List of Organizational Units (OUs) to create"
+  type        = list(string)
+  default     = ["Security", "Audit Log"]
+}
 
 variable "aft_logs_bucket_name" {
-  description = "The name of the S3 bucket for AFT logs."
+  description = "Name of the S3 bucket for AFT logs"
   type        = string
 }
 
-variable "global_tags" {
-  description = "Global tags to apply to all resources."
+variable "tags" {
+  description = "Tags to apply to all resources"
   type        = map(string)
   default = {
     Environment = "Production"
