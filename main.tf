@@ -1,7 +1,6 @@
 resource "aws_kms_key" "log_encryption_key" {
   description             = "KMS key for encrypting S3 bucket, DynamoDB, SNS, and CloudWatch logs"
   enable_key_rotation     = true
-  deletion_window_in_days = 30
 
   policy = <<EOF
 {
