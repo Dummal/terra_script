@@ -29,7 +29,7 @@ resource "aws_cloudtrail" "landing_zone_trail" {
   }
 }
 
-# S3 bucket to store CloudTrail logs
+# S3 bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = "${var.project_name}-cloudtrail-logs-${random_string.suffix.result}"
   acl    = "private"
@@ -95,15 +95,23 @@ output "cloudtrail_s3_bucket" {
   value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 
-output "cloudtrail_arn" {
-  description = "The ARN of the CloudTrail."
-  value       = aws_cloudtrail.landing_zone_trail.arn
+output "cloudtrail_s3_bucket_arn" {
+  description = "The ARN of the S3 bucket used for CloudTrail logs."
+  value       = aws_s3_bucket.cloudtrail_logs.arn
 }
-
-# Instructions to Apply:
-# 1. Save this script in a file, e.g., `main.tf`.
-# 2. Initialize Terraform: `terraform init`.
-# 3. Review the plan: `terraform plan`.
-# 4. Apply the configuration: `terraform apply`.
-# 5. Confirm the changes when prompted.
 ```
+
+### Instructions to Apply:
+1. Save the script in a file, e.g., `main.tf`.
+2. Create a `variables.tf` file if you want to override default values.
+3. Initialize Terraform: `terraform init`.
+4. Review the plan: `terraform plan`.
+5. Apply the configuration: `terraform apply`.
+6. Confirm the changes when prompted.
+
+### Assumptions:
+- Multi-region support is enabled for CloudTrail as per user input.
+- AWS Organizations is not used, so no account management is included.
+- Centralized logging is not required, so logs are stored in a single S3 bucket.
+- Default region is set to `us-east-1` unless overridden.
+- Sensitive data like access keys should be managed securely (e.g., using environment variables or a secrets manager).
