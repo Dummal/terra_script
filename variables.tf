@@ -9,8 +9,10 @@ variable "s3_bucket_name" {
   type        = string
 }
 
-variable "environment" {
-  description = "The environment for the resources (e.g., dev, prod)"
-  type        = string
-  default     = "dev"
-}
+variable "common_tags" {
+  description = "A map of tags to apply to all resources"
+  type        = map(string)
+  default     = {
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
