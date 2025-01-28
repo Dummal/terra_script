@@ -1,18 +1,26 @@
 variable "aws_region" {
   description = "The AWS region to deploy resources in"
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
 }
 
-variable "s3_bucket_name" {
-  description = "The name of the S3 bucket for storing AFT logs"
+variable "master_account_email" {
+  description = "Email address for the master account"
   type        = string
 }
 
-variable "common_tags" {
-  description = "A map of tags to apply to all resources"
-  type        = map(string)
-  default     = {
-    Environment = "production"
-    ManagedBy   = "terraform"
-  }
+variable "master_account_id" {
+  description = "AWS Account ID for the master account"
+  type        = string
+}
+
+variable "organizational_units" {
+  description = "List of Organizational Units (OUs) to create"
+  type        = list(string)
+  default     = ["Security", "Audit Log"]
+}
+
+variable "aft_logs_bucket_name" {
+  description = "Name of the S3 bucket for AFT logs"
+  type        = string
+}
