@@ -1,6 +1,6 @@
 ```hcl
 # main.tf
-# Terraform script to set up an AWS Landing Zone with AWS Organizations and centralized logging.
+# Terraform script to set up a basic AWS Landing Zone with multi-region support and AWS CloudTrail logging enabled.
 
 terraform {
   required_version = ">= 1.3.0"
@@ -13,155 +13,132 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region = var.default_region
 }
 
-# Module: AWS Organizations
-module "aws_organizations" {
-  source = "./modules/aws_organizations"
+# Enable AWS CloudTrail for logging
+resource "aws_cloudtrail" "main" {
+  name                          = var.cloudtrail_name
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
+  include_global_service_events = true
+  is_multi_region_trail         = var.enable_multi_region
+  enable_logging                = true
 
-  organization_master_account_email = var.organization_master_account_email
-  organization_master_account_name  = var.organization_master_account_name
-  tags                              = var.default_tags
+  tags = var.default_tags
 }
 
-# Module: Centralized Logging
-module "centralized_logging" {
-  source = "./modules/centralized_logging"
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket = var.cloudtrail_s3_bucket_name
 
-  logging_account_email = var.logging_account_email
-  logging_account_name  = var.logging_account_name
-  tags                  = var.default_tags
+  # Enable versioning for the bucket
+  versioning {
+    enabled = true
+  }
+
+  # Enable server-side encryption
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "AES256"
+      }
+    }
+  }
+
+  tags = var.default_tags
+}
+
+# IAM policy for CloudTrail to write logs to the S3 bucket
+resource "aws_s3_bucket_policy" "cloudtrail_logs_policy" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action    = "s3:GetBucketAcl"
+        Resource  = aws_s3_bucket.cloudtrail_logs.arn
+      },
+      {
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Variables
-variable "aws_region" {
-  description = "The AWS region to deploy resources in."
+variable "default_region" {
+  description = "Default AWS region"
   type        = string
   default     = "us-east-1"
 }
 
-variable "organization_master_account_email" {
-  description = "Email address for the AWS Organizations master account."
+variable "cloudtrail_name" {
+  description = "Name of the CloudTrail"
   type        = string
+  default     = "landingzone-cloudtrail"
 }
 
-variable "organization_master_account_name" {
-  description = "Name for the AWS Organizations master account."
+variable "cloudtrail_s3_bucket_name" {
+  description = "Name of the S3 bucket for CloudTrail logs"
   type        = string
+  default     = "landingzone-cloudtrail-logs"
 }
 
-variable "logging_account_email" {
-  description = "Email address for the centralized logging account."
-  type        = string
-}
-
-variable "logging_account_name" {
-  description = "Name for the centralized logging account."
-  type        = string
+variable "enable_multi_region" {
+  description = "Enable multi-region support for CloudTrail"
+  type        = bool
+  default     = true
 }
 
 variable "default_tags" {
-  description = "Default tags to apply to all resources."
-  type = map(string)
+  description = "Default tags to apply to all resources"
+  type        = map(string)
   default = {
-    Environment = "production"
-    Project     = "landing-zone"
+    Environment = "LandingZone"
+    Project     = "Hello"
+    Owner       = "Hello"
   }
 }
 
 # Outputs
-output "organization_id" {
-  description = "The ID of the AWS Organization."
-  value       = module.aws_organizations.organization_id
+output "cloudtrail_arn" {
+  description = "The ARN of the CloudTrail"
+  value       = aws_cloudtrail.main.arn
 }
 
-output "logging_account_id" {
-  description = "The ID of the centralized logging account."
-  value       = module.centralized_logging.logging_account_id
-}
-```
-
-### Module: AWS Organizations (`modules/aws_organizations/main.tf`)
-```hcl
-resource "aws_organizations_organization" "this" {
-  feature_set = "ALL"
-}
-
-resource "aws_organizations_account" "master_account" {
-  email = var.organization_master_account_email
-  name  = var.organization_master_account_name
-  tags  = var.tags
-}
-
-output "organization_id" {
-  description = "The ID of the AWS Organization."
-  value       = aws_organizations_organization.this.id
+output "cloudtrail_s3_bucket_name" {
+  description = "The name of the S3 bucket used for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
 ```
 
-### Module: Centralized Logging (`modules/centralized_logging/main.tf`)
-```hcl
-resource "aws_organizations_account" "logging_account" {
-  email = var.logging_account_email
-  name  = var.logging_account_name
-  tags  = var.tags
-}
+### Instructions to Apply:
+1. Save the script in a file, e.g., `main.tf`.
+2. Create a `variables.tf` file if you want to override any default values.
+3. Initialize Terraform: `terraform init`.
+4. Review the plan: `terraform plan`.
+5. Apply the configuration: `terraform apply`.
+6. Confirm the changes when prompted.
 
-output "logging_account_id" {
-  description = "The ID of the centralized logging account."
-  value       = aws_organizations_account.logging_account.id
-}
-```
-
-### Variables for Modules (`modules/aws_organizations/variables.tf` and `modules/centralized_logging/variables.tf`)
-```hcl
-variable "organization_master_account_email" {
-  description = "Email address for the AWS Organizations master account."
-  type        = string
-}
-
-variable "organization_master_account_name" {
-  description = "Name for the AWS Organizations master account."
-  type        = string
-}
-
-variable "logging_account_email" {
-  description = "Email address for the centralized logging account."
-  type        = string
-}
-
-variable "logging_account_name" {
-  description = "Name for the centralized logging account."
-  type        = string
-}
-
-variable "tags" {
-  description = "Tags to apply to resources."
-  type        = map(string)
-}
-```
-
-### Instructions to Apply
-1. Save the main script in `main.tf` and the module scripts in their respective directories (`modules/aws_organizations` and `modules/centralized_logging`).
-2. Create a `terraform.tfvars` file to provide values for the variables:
-   ```hcl
-   aws_region = "us-east-1"
-   organization_master_account_email = "master@example.com"
-   organization_master_account_name  = "MasterAccount"
-   logging_account_email = "logging@example.com"
-   logging_account_name  = "LoggingAccount"
-   ```
-3. Run the following commands:
-   ```bash
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-4. Confirm the changes when prompted.
-
-### Assumptions
-- AWS Organizations is used to manage accounts.
-- Centralized logging is implemented by creating a dedicated logging account.
-- No multi-region support is required.
-- Default tags are applied to all resources for better organization and cost tracking.
+### Assumptions:
+- Multi-region support is enabled for CloudTrail as per the user input.
+- AWS Organizations is not used, so no account management is included.
+- Centralized logging is not required, so logs are stored in a single S3 bucket.
+- Default tags include `Environment`, `Project`, and `Owner` based on user input.
