@@ -1,3 +1,4 @@
 provider "aws" {
-  region = var.default_region
+  # Use variables for region and profile to support multi-region deployments
+  region = var.aws_region
 }
