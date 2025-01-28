@@ -1,23 +1,42 @@
-variable "enable_control_tower" {
-  description = "Flag to enable AWS Control Tower if not already enabled"
+variable "default_region" {
+  description = "Default AWS region for the landing zone"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "additional_regions" {
+  description = "Additional AWS regions for multi-region support"
+  type        = list(string)
+  default     = ["us-west-1", "us-west-2"]
+}
+
+variable "landing_zone_username" {
+  description = "Username for the landing zone"
+  type        = string
+}
+
+variable "landing_zone_email" {
+  description = "Email address for the landing zone"
+  type        = string
+}
+
+variable "enable_cloudtrail" {
+  description = "Enable AWS CloudTrail logging"
   type        = bool
   default     = true
 }
 
-variable "master_account_email" {
-  description = "Email address for the master account"
-  type        = string
+variable "enable_cloudtrail" {
+  description = "Enable AWS CloudTrail logging"
+  type        = bool
 }
 
-variable "organizational_units" {
-  description = "List of organizational units to create"
+variable "regions" {
+  description = "List of regions where CloudTrail should be enabled"
   type        = list(string)
-  default     = ["Security", "Audit Log"]
 }
 
-variable "aws_region" {
-  description = "The AWS region to deploy the Control Tower landing zone"
-  type        = string
+variable "tags" {
+  description = "Tags to apply to resources"
+  type        = map(string)
 }
-
-    
