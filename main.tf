@@ -1,11 +1,6 @@
 ```hcl
 # main.tf
-# Terraform script to create a multi-region AWS landing zone with CloudTrail enabled.
-# Assumptions:
-# - AWS Organizations is not used.
-# - Logs are not centralized across accounts.
-# - Multi-region support is enabled.
-# - Sensitive data like email and username are passed as variables.
+# Terraform script to create an AWS Landing Zone with centralized logging and AWS Organizations
 
 terraform {
   required_version = ">= 1.3.0"
@@ -18,119 +13,132 @@ terraform {
 }
 
 provider "aws" {
-  region = var.default_region
+  region = var.aws_region
 }
 
-# Enable AWS CloudTrail for logging
-resource "aws_cloudtrail" "landing_zone_trail" {
-  name                          = "${var.project_name}-cloudtrail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
+# AWS Organizations setup
+resource "aws_organizations_organization" "main" {
+  feature_set = "ALL"
 
+  # Tags for resource identification
   tags = {
-    Environment = var.environment
     Project     = var.project_name
+    Environment = var.environment
   }
 }
 
-# S3 bucket for CloudTrail logs
-resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket = "${var.project_name}-cloudtrail-logs"
+# Centralized logging account
+module "logging_account" {
+  source = "./modules/logging_account"
 
-  acl = "private"
-
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
+  account_name  = "LoggingAccount"
+  email_address = var.logging_account_email
   tags = {
-    Environment = var.environment
     Project     = var.project_name
-  }
-}
-
-# IAM role for CloudTrail
-resource "aws_iam_role" "cloudtrail_role" {
-  name = "${var.project_name}-cloudtrail-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = { Service = "cloudtrail.amazonaws.com" }
-      }
-    ]
-  })
-
-  tags = {
     Environment = var.environment
-    Project     = var.project_name
   }
-}
-
-# Attach policy to the IAM role
-resource "aws_iam_role_policy_attachment" "cloudtrail_policy_attachment" {
-  role       = aws_iam_role.cloudtrail_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCloudTrailFullAccess"
 }
 
 # Variables
-variable "project_name" {
-  description = "Name of the project or organization"
-  type        = string
-  default     = "default_project" # Replace with a meaningful default
-}
-
-variable "default_region" {
-  description = "Default AWS region for the landing zone"
+variable "aws_region" {
+  description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"
 }
 
+variable "project_name" {
+  description = "Name of the project or organization"
+  type        = string
+  default     = "default_project"
+}
+
 variable "environment" {
-  description = "Environment for the resources (e.g., dev, prod)"
+  description = "Environment (e.g., dev, staging, prod)"
   type        = string
   default     = "dev"
 }
 
+variable "logging_account_email" {
+  description = "Email address for the logging account"
+  type        = string
+}
+
 # Outputs
-output "cloudtrail_name" {
-  description = "Name of the CloudTrail"
-  value       = aws_cloudtrail.landing_zone_trail.name
+output "organization_id" {
+  description = "The ID of the AWS Organization"
+  value       = aws_organizations_organization.main.id
 }
 
-output "cloudtrail_bucket" {
-  description = "S3 bucket for CloudTrail logs"
-  value       = aws_s3_bucket.cloudtrail_bucket.bucket
-}
-
-output "cloudtrail_role" {
-  description = "IAM role for CloudTrail"
-  value       = aws_iam_role.cloudtrail_role.name
+output "logging_account_id" {
+  description = "The ID of the centralized logging account"
+  value       = module.logging_account.account_id
 }
 ```
 
-### Instructions to Apply:
-1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file if you want to override the default values for variables.
-3. Initialize Terraform: `terraform init`.
-4. Review the plan: `terraform plan`.
-5. Apply the configuration: `terraform apply`.
+### Module: Logging Account (`modules/logging_account/main.tf`)
+```hcl
+# Module to create a logging account in AWS Organizations
+
+resource "aws_organizations_account" "logging" {
+  name  = var.account_name
+  email = var.email_address
+
+  # Tags for resource identification
+  tags = var.tags
+}
+
+# Outputs
+output "account_id" {
+  description = "The ID of the logging account"
+  value       = aws_organizations_account.logging.id
+}
+```
+
+### Module: Logging Account (`modules/logging_account/variables.tf`)
+```hcl
+variable "account_name" {
+  description = "Name of the logging account"
+  type        = string
+}
+
+variable "email_address" {
+  description = "Email address for the logging account"
+  type        = string
+}
+
+variable "tags" {
+  description = "Tags to apply to the logging account"
+  type        = map(string)
+}
+```
+
+### Module: Logging Account (`modules/logging_account/outputs.tf`)
+```hcl
+output "account_id" {
+  description = "The ID of the logging account"
+  value       = aws_organizations_account.logging.id
+}
+```
+
+### Instructions to Apply
+1. Save the main script in a file named `main.tf`.
+2. Create a folder named `modules/logging_account` and save the module files (`main.tf`, `variables.tf`, `outputs.tf`) inside it.
+3. Initialize Terraform:
+   ```bash
+   terraform init
+   ```
+4. Review the plan:
+   ```bash
+   terraform plan -var="logging_account_email=<your_logging_account_email>"
+   ```
+5. Apply the configuration:
+   ```bash
+   terraform apply -var="logging_account_email=<your_logging_account_email>"
+   ```
 6. Confirm the changes when prompted.
 
-### Notes:
-- Replace `default_project` in the `project_name` variable with your project name.
-- Ensure the AWS credentials are configured in your environment before running the script.
-- This script assumes that AWS Organizations is not used and logs are not centralized. If these assumptions change, the script will need to be updated.
+### Assumptions
+- AWS Organizations is enabled in the account.
+- The email address for the logging account is provided as a variable (`logging_account_email`).
+- Multi-region support is not required, so the resources are deployed in a single region (`us-east-1` by default).
+- AWS CloudTrail logging is not enabled as per the user input. This can be added later if needed.
