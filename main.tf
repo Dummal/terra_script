@@ -34,18 +34,6 @@ resource "aws_s3_bucket" "cloudtrail_logs" {
   bucket = "${var.project_name}-cloudtrail-logs-${random_string.suffix.result}"
   acl    = "private"
 
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
-    }
-  }
-
   tags = {
     Environment = var.environment
     Project     = var.project_name
@@ -79,7 +67,7 @@ variable "enable_multi_region" {
 }
 
 variable "environment" {
-  description = "The environment for the resources (e.g., dev, staging, prod)."
+  description = "The environment for the resources (e.g., dev, prod)."
   type        = string
   default     = "dev"
 }
@@ -103,7 +91,7 @@ output "cloudtrail_s3_bucket_arn" {
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file if you want to override default values.
+2. Create a `variables.tf` file if you want to override default values for variables.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
@@ -114,4 +102,4 @@ output "cloudtrail_s3_bucket_arn" {
 - AWS Organizations is not used, so no account management is included.
 - Centralized logging is not required, so logs are stored in a single S3 bucket.
 - Default region is set to `us-east-1` unless overridden.
-- Sensitive data like access keys should be managed securely (e.g., using environment variables or a secrets manager).
+- Sensitive data like usernames and emails are not directly used in this configuration.
