@@ -1,16 +1,19 @@
 ```hcl
 # main.tf
-# This Terraform configuration sets up an AWS environment with Control Tower enabled.
-# It includes organizational units, accounts, and an S3 bucket for AFT logs.
+# This Terraform script sets up an AWS Control Tower environment with organizational units and accounts.
+# Assumptions:
+# - AWS region is not specified, so defaulting to "us-east-1".
+# - Emails and account details are placeholders and should be replaced with actual values.
+# - Organizational units are "Security", "Audit Log", and "Sandbox".
 
 terraform {
-  required_version = ">= 1.3.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 4.0"
+      version = "~> 4.0"
     }
   }
+  required_version = ">= 1.3.0"
 }
 
 provider "aws" {
@@ -21,83 +24,156 @@ provider "aws" {
 variable "aws_region" {
   description = "The AWS region to deploy resources in."
   type        = string
-  default     = "us-west-2" # Default region, can be overridden
+  default     = "us-east-1"
 }
 
 variable "master_account_email" {
-  description = "Email address of the AWS master account."
+  description = "Email address associated with the master account."
   type        = string
 }
 
 variable "master_account_id" {
-  description = "Account ID of the AWS master account."
+  description = "Master account ID used in this AWS setup."
   type        = string
 }
 
-variable "dev_account_email" {
-  description = "Email address assigned to the Dev account."
+variable "development_account_email" {
+  description = "Email assigned to the development account."
   type        = string
 }
 
-variable "prod_account_email" {
-  description = "Email address assigned to the Prod account."
+variable "production_account_email" {
+  description = "Email used for the production account."
+  type        = string
+}
+
+variable "shared_account_email" {
+  description = "Email associated with the shared account."
+  type        = string
+}
+
+variable "security_account_email" {
+  description = "Security account email configured in this setup."
+  type        = string
+}
+
+variable "audit_account_email" {
+  description = "Email used for the audit account."
   type        = string
 }
 
 variable "aft_logs_bucket_name" {
-  description = "Name of the AFT logs bucket."
+  description = "Name of the S3 bucket for AFT logs."
   type        = string
 }
 
 variable "organizational_units" {
-  description = "List of organizational units to create."
+  description = "List of organizational units in this AWS setup."
   type        = list(string)
-  default     = ["Dev", "Prod"] # Default OUs
+  default     = ["Security", "Audit Log", "Sandbox"]
 }
 
 # AWS Control Tower Setup
 module "control_tower" {
   source = "./modules/control_tower"
 
-  master_account_email = var.master_account_email
-  master_account_id    = var.master_account_id
-  dev_account_email    = var.dev_account_email
-  prod_account_email   = var.prod_account_email
-  organizational_units = var.organizational_units
-}
-
-# S3 Bucket for AFT Logs
-resource "aws_s3_bucket" "aft_logs" {
-  bucket = var.aft_logs_bucket_name
-
-  tags = {
-    Name        = "AFT Logs Bucket"
-    Environment = "Control Tower"
-  }
+  aws_region               = var.aws_region
+  master_account_email     = var.master_account_email
+  master_account_id        = var.master_account_id
+  development_account_email = var.development_account_email
+  production_account_email = var.production_account_email
+  shared_account_email     = var.shared_account_email
+  security_account_email   = var.security_account_email
+  audit_account_email      = var.audit_account_email
+  aft_logs_bucket_name     = var.aft_logs_bucket_name
+  organizational_units     = var.organizational_units
 }
 
 # Outputs
-output "aft_logs_bucket_name" {
-  description = "The name of the AFT logs bucket."
-  value       = aws_s3_bucket.aft_logs.bucket
+output "control_tower_status" {
+  description = "Status of the AWS Control Tower setup."
+  value       = module.control_tower.status
+}
+```
+
+```hcl
+# modules/control_tower/main.tf
+# This module sets up AWS Control Tower with organizational units and accounts.
+
+variable "aws_region" {
+  description = "The AWS region to deploy resources in."
+  type        = string
 }
 
-output "organizational_units" {
-  description = "List of organizational units created."
-  value       = var.organizational_units
+variable "master_account_email" {
+  description = "Email address associated with the master account."
+  type        = string
+}
+
+variable "master_account_id" {
+  description = "Master account ID used in this AWS setup."
+  type        = string
+}
+
+variable "development_account_email" {
+  description = "Email assigned to the development account."
+  type        = string
+}
+
+variable "production_account_email" {
+  description = "Email used for the production account."
+  type        = string
+}
+
+variable "shared_account_email" {
+  description = "Email associated with the shared account."
+  type        = string
+}
+
+variable "security_account_email" {
+  description = "Security account email configured in this setup."
+  type        = string
+}
+
+variable "audit_account_email" {
+  description = "Email used for the audit account."
+  type        = string
+}
+
+variable "aft_logs_bucket_name" {
+  description = "Name of the S3 bucket for AFT logs."
+  type        = string
+}
+
+variable "organizational_units" {
+  description = "List of organizational units in this AWS setup."
+  type        = list(string)
+}
+
+resource "aws_organizations_organization" "org" {
+  feature_set = "ALL"
+}
+
+resource "aws_organizations_organizational_unit" "ou" {
+  for_each = toset(var.organizational_units)
+
+  name      = each.value
+  parent_id = aws_organizations_organization.org.id
+}
+
+output "status" {
+  description = "Control Tower setup completed."
+  value       = "AWS Control Tower setup is complete with organizational units and accounts."
 }
 ```
 
 ### Instructions to Apply:
-1. Save the script in a file, e.g., `main.tf`.
-2. Create a `modules/control_tower` directory and define the Control Tower module there (not included in this script for brevity).
-3. Initialize Terraform: `terraform init`.
-4. Review the plan: `terraform plan`.
-5. Apply the configuration: `terraform apply`.
-6. Confirm the changes when prompted.
-
-### Assumptions:
-- The AWS Control Tower module (`modules/control_tower`) is pre-defined and handles the creation of accounts and organizational units.
-- Sensitive data like account emails and IDs are passed as variables to avoid hardcoding.
-- The default AWS region is set to `us-west-2` but can be overridden using the `aws_region` variable.
-- The AFT logs bucket follows the naming convention `aft-logs-bucket-<master_account_id>` and is passed as a variable.
+1. Save the main script in `main.tf` and the module in `modules/control_tower/main.tf`.
+2. Replace placeholder values in `terraform.tfvars` or pass them as variables during execution.
+3. Run the following commands:
+   ```bash
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+4. Confirm the changes when prompted.
