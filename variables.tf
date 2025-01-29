@@ -15,7 +15,7 @@ variable "master_account_id" {
 }
 
 variable "organizational_units" {
-  description = "List of Organizational Units (OUs) to create"
+  description = "List of Organizational Units to create"
   type        = list(string)
   default     = ["Security", "Audit Log"]
 }
