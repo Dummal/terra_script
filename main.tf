@@ -1,115 +1,103 @@
-resource "aws_s3_bucket" "aft_logs_bucket" {
-  bucket = "aft-logs-bucket-863518414447"
+```hcl
+# main.tf
+# This Terraform configuration sets up an AWS environment with Control Tower enabled.
+# It includes organizational units, accounts, and an S3 bucket for AFT logs.
 
-  versioning {
-    enabled = true
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm     = "aws:kms"
-        kms_master_key_id = aws_kms_key.aft_kms_key.arn
-      }
+terraform {
+  required_version = ">= 1.3.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 4.0"
     }
   }
+}
 
-  block_public_access {
-    block_public_acls       = true
-    block_public_policy     = true
-    ignore_public_acls      = true
-    restrict_public_buckets = true
-  }
+provider "aws" {
+  region = var.aws_region
+}
+
+# Variables
+variable "aws_region" {
+  description = "The AWS region to deploy resources in."
+  type        = string
+  default     = "us-west-2" # Default region, can be overridden
+}
+
+variable "master_account_email" {
+  description = "Email address of the AWS master account."
+  type        = string
+}
+
+variable "master_account_id" {
+  description = "Account ID of the AWS master account."
+  type        = string
+}
+
+variable "dev_account_email" {
+  description = "Email address assigned to the Dev account."
+  type        = string
+}
+
+variable "prod_account_email" {
+  description = "Email address assigned to the Prod account."
+  type        = string
+}
+
+variable "aft_logs_bucket_name" {
+  description = "Name of the AFT logs bucket."
+  type        = string
+}
+
+variable "organizational_units" {
+  description = "List of organizational units to create."
+  type        = list(string)
+  default     = ["Dev", "Prod"] # Default OUs
+}
+
+# AWS Control Tower Setup
+module "control_tower" {
+  source = "./modules/control_tower"
+
+  master_account_email = var.master_account_email
+  master_account_id    = var.master_account_id
+  dev_account_email    = var.dev_account_email
+  prod_account_email   = var.prod_account_email
+  organizational_units = var.organizational_units
+}
+
+# S3 Bucket for AFT Logs
+resource "aws_s3_bucket" "aft_logs" {
+  bucket = var.aft_logs_bucket_name
 
   tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
+    Name        = "AFT Logs Bucket"
+    Environment = "Control Tower"
   }
 }
 
-resource "aws_kms_key" "aft_kms_key" {
-  description             = "KMS key for AFT resources"
-  enable_key_rotation     = true
-  deletion_window_in_days = 30
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Id      = "key-default-1"
-    Statement = [
-      {
-        Sid       = "Enable IAM User Permissions"
-        Effect    = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::863518414447:root"
-        }
-        Action    = "kms:*"
-        Resource  = "*"
-      },
-      {
-        Sid       = "Allow CloudWatch Logs"
-        Effect    = "Allow"
-        Principal = {
-          Service = "logs.us-west-2.amazonaws.com"
-        }
-        Action    = [
-          "kms:Encrypt",
-          "kms:Decrypt",
-          "kms:ReEncrypt*",
-          "kms:GenerateDataKey*",
-          "kms:DescribeKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
+# Outputs
+output "aft_logs_bucket_name" {
+  description = "The name of the AFT logs bucket."
+  value       = aws_s3_bucket.aft_logs.bucket
 }
 
-resource "aws_sns_topic" "aft_notifications" {
-  name              = "aft-notifications"
-  kms_master_key_id = aws_kms_key.aft_kms_key.arn
-
-  tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
+output "organizational_units" {
+  description = "List of organizational units created."
+  value       = var.organizational_units
 }
+```
 
-resource "aws_dynamodb_table" "aft_requests" {
-  name           = "aft-requests"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
-  point_in_time_recovery {
-    enabled = true
-  }
+### Instructions to Apply:
+1. Save the script in a file, e.g., `main.tf`.
+2. Create a `modules/control_tower` directory and define the Control Tower module there (not included in this script for brevity).
+3. Initialize Terraform: `terraform init`.
+4. Review the plan: `terraform plan`.
+5. Apply the configuration: `terraform apply`.
+6. Confirm the changes when prompted.
 
-  attribute {
-    name = "id"
-    type = "S"
-  }
-
-  server_side_encryption {
-    enabled     = true
-    kms_key_arn = aws_kms_key.aft_kms_key.arn
-  }
-
-  tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
-}
-
-resource "aws_cloudwatch_log_group" "aft_logs" {
-  name              = "/aws/aft/logs"
-  retention_in_days = 90
-  kms_key_id        = aws_kms_key.aft_kms_key.arn
-
-  tags = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
-}
+### Assumptions:
+- The AWS Control Tower module (`modules/control_tower`) is pre-defined and handles the creation of accounts and organizational units.
+- Sensitive data like account emails and IDs are passed as variables to avoid hardcoding.
+- The default AWS region is set to `us-west-2` but can be overridden using the `aws_region` variable.
+- The AFT logs bucket follows the naming convention `aft-logs-bucket-<master_account_id>` and is passed as a variable.
