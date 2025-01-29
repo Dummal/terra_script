@@ -71,7 +71,7 @@ variable "organizational_units" {
   default     = ["Security", "Audit Log", "Sandbox"] # Default OUs
 }
 
-# AWS Organizations setup
+# AWS Organizations Setup
 resource "aws_organizations_organization" "org" {
   feature_set = "ALL"
 }
@@ -84,50 +84,7 @@ resource "aws_organizations_organizational_unit" "ou" {
   parent_id = aws_organizations_organization.org.id
 }
 
-# Accounts
-resource "aws_organizations_account" "master_account" {
-  email      = var.master_account_email
-  name       = "MasterAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organization.org.id
-}
-
-resource "aws_organizations_account" "development_account" {
-  email      = var.development_account_email
-  name       = "DevelopmentAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organizational_unit.ou["Sandbox"].id
-}
-
-resource "aws_organizations_account" "production_account" {
-  email      = var.production_account_email
-  name       = "ProductionAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organizational_unit.ou["Security"].id
-}
-
-resource "aws_organizations_account" "shared_account" {
-  email      = var.shared_account_email
-  name       = "SharedAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organizational_unit.ou["Audit Log"].id
-}
-
-resource "aws_organizations_account" "security_account" {
-  email      = var.security_account_email
-  name       = "SecurityAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organizational_unit.ou["Security"].id
-}
-
-resource "aws_organizations_account" "audit_account" {
-  email      = var.audit_account_email
-  name       = "AuditAccount"
-  role_name  = "OrganizationAccountAccessRole"
-  parent_id  = aws_organizations_organizational_unit.ou["Audit Log"].id
-}
-
-# S3 Bucket for AFT Logs
+# Example: S3 Bucket for AFT Logs
 resource "aws_s3_bucket" "aft_logs" {
   bucket = var.aft_logs_bucket_name
 
@@ -144,8 +101,8 @@ output "organization_id" {
 }
 
 output "organizational_units" {
-  description = "The created organizational units."
-  value       = aws_organizations_organizational_unit.ou
+  description = "List of created organizational units."
+  value       = [for ou in aws_organizations_organizational_unit.ou : ou.name]
 }
 
 output "aft_logs_bucket_name" {
@@ -156,13 +113,13 @@ output "aft_logs_bucket_name" {
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file to define the variables or pass them via `terraform.tfvars`.
+2. Create a `variables.tf` file to define the variables or pass them via CLI.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
 6. Confirm the changes when prompted.
 
 ### Notes:
-- Replace the default values in `terraform.tfvars` or pass them as CLI arguments.
+- Replace the default values in the `variables.tf` file or pass them as CLI arguments.
 - Ensure the AWS credentials are configured in your environment before running the script.
-- The script assumes that AWS Control Tower is not explicitly enabled but uses AWS Organizations for account and OU management.
+- This script assumes AWS Control Tower is enabled and organizational units are being managed.
