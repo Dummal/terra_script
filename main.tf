@@ -71,7 +71,7 @@ variable "organizational_units" {
   default     = ["Security", "Audit Log", "Sandbox"] # Default OUs
 }
 
-# AWS Organizations Setup
+# AWS Organizations setup
 resource "aws_organizations_organization" "org" {
   feature_set = "ALL"
 }
@@ -84,7 +84,7 @@ resource "aws_organizations_organizational_unit" "ou" {
   parent_id = aws_organizations_organization.org.id
 }
 
-# Example: S3 Bucket for AFT Logs
+# Example: S3 bucket for AFT logs
 resource "aws_s3_bucket" "aft_logs" {
   bucket = var.aft_logs_bucket_name
 
@@ -101,8 +101,8 @@ output "organization_id" {
 }
 
 output "organizational_units" {
-  description = "List of created organizational units."
-  value       = [for ou in aws_organizations_organizational_unit.ou : ou.name]
+  description = "The list of created organizational units."
+  value       = aws_organizations_organizational_unit.ou.*.name
 }
 
 output "aft_logs_bucket_name" {
@@ -113,13 +113,13 @@ output "aft_logs_bucket_name" {
 
 ### Instructions to Apply:
 1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file to define the variables or pass them via CLI.
+2. Create a `variables.tf` file to define the variables or pass them via `terraform.tfvars`.
 3. Initialize Terraform: `terraform init`.
 4. Review the plan: `terraform plan`.
 5. Apply the configuration: `terraform apply`.
 6. Confirm the changes when prompted.
 
 ### Notes:
-- Replace the default values in the `variables.tf` file or pass them as CLI arguments.
-- Ensure the AWS credentials are configured in your environment before running the script.
+- Replace the default values in `terraform.tfvars` or pass them as CLI arguments.
+- Ensure the AWS credentials are configured in your environment.
 - This script assumes AWS Control Tower is enabled and organizational units are being managed.
