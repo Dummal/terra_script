@@ -20,5 +20,5 @@ output "dynamodb_table_name" {
 
 output "cloudwatch_log_group_name" {
   value       = module.aws_resources.cloudwatch_log_group_name
-  description = "The name of the CloudWatch Log Group created for AFT logging."
+  description = "The name of the CloudWatch Log Group created for AFT operations logging."
 }

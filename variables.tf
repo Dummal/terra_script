@@ -11,17 +11,17 @@ variable "enable_control_tower" {
 }
 
 variable "master_account_email" {
-  description = "Email address for the master account."
+  description = "Email address for the AWS Control Tower master account."
   type        = string
 }
 
 variable "master_account_id" {
-  description = "AWS account ID for the master account."
+  description = "Account ID for the AWS Control Tower master account."
   type        = string
 }
 
 variable "organizational_units" {
-  description = "List of organizational units to create."
+  description = "List of organizational units to create in AWS Control Tower."
   type        = list(string)
   default     = ["Security", "Audit Log", "Sandbox"]
 }
@@ -57,37 +57,7 @@ variable "aft_logs_bucket_name" {
   default     = "aft-logs-bucket-863518414447"
 }
 
-variable "kms_key_rotation_enabled" {
-  description = "Flag to enable KMS key rotation."
-  type        = bool
-  default     = true
-}
-
-variable "sns_topic_name" {
-  description = "Name of the SNS topic for notifications."
-  type        = string
-  default     = "aft-notifications"
-}
-
-variable "dynamodb_table_name" {
-  description = "Name of the DynamoDB table for AFT requests."
-  type        = string
-  default     = "aft-requests"
-}
-
-variable "cloudwatch_log_group_name" {
-  description = "Name of the CloudWatch Log Group for AFT logs."
-  type        = string
-  default     = "/aws/aft/logs"
-}
-
-variable "cloudwatch_log_retention_days" {
-  description = "Retention period for CloudWatch logs in days."
-  type        = number
-  default     = 90
-}
-
-variable "resource_tags" {
+variable "tags" {
   description = "Tags to apply to all resources."
   type        = map(string)
   default     = {
