@@ -39,7 +39,7 @@ variable "default_tags" {
   type        = map(string)
   default     = {
     Environment = "Managed by Terraform"
-    Owner       = "Genworx Organization"
+    Project     = "AWS Organization Setup"
   }
 
 variable "organization_name" {
@@ -53,7 +53,7 @@ variable "parent_id" {
 }
 
 variable "accounts" {
-  description = "A map of accounts to create in the AWS Organization."
+  description = "A map of accounts to create, with email and name."
   type = map(object({
     email = string
     name  = string
