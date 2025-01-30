@@ -1,34 +1,29 @@
 output "organization_id" {
-  value       = module.aws_organization.organization_id
-  description = "The ID of the AWS Organization."
+  description = "The ID of the AWS Organization"
+  value       = aws_organizations_organization.org.id
 }
 
-output "account_ids" {
-  value       = module.aws_organization.account_ids
-  description = "The IDs of the created AWS accounts."
+output "dev_account_id" {
+  description = "The ID of the Development account"
+  value       = module.dev_account.account_id
 }
 
-output "organization_id" {
-  value       = module.aws_organization.organization_id
-  description = "The ID of the AWS Organization."
+output "prod_account_id" {
+  description = "The ID of the Production account"
+  value       = module.prod_account.account_id
 }
 
-output "account_ids" {
-  value       = module.aws_organization.account_ids
-  description = "The IDs of the created AWS accounts."
+output "security_account_id" {
+  description = "The ID of the Security account"
+  value       = module.security_account.account_id
 }
 
-output "organization_id" {
-  value = aws_organizations_organization.this.id
+output "audit_account_id" {
+  description = "The ID of the Audit account"
+  value       = module.audit_account.account_id
 }
 
-output "account_ids" {
-  value = { for k, v in aws_organizations_account.accounts : k => v.id }
-
-output "organization_id" {
-  value       = aws_organizations_organization.this.id
-  description = "The ID of the AWS Organization."
+output "account_id" {
+  description = "The ID of the AWS account"
+  value       = aws_organizations_account.account.id
 }
-
-output "account_ids" {
-  value       = { for k, v in aws_organizations_account.accounts : k => v.id }
