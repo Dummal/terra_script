@@ -1,5 +1,5 @@
 variable "aws_region" {
-  description = "The AWS region to deploy resources in."
+  description = "The AWS region to use for the provider."
   type        = string
   default     = "us-east-1"
 }
@@ -53,7 +53,7 @@ variable "parent_id" {
 }
 
 variable "accounts" {
-  description = "A map of accounts to create in the AWS Organization."
+  description = "A map of accounts to create, with email and name."
   type = map(object({
     email = string
     name  = string
