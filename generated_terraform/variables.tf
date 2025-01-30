@@ -1,52 +1,65 @@
+variable "aws_region" {
+  description = "The AWS region to deploy resources in."
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "organization_name" {
+  description = "The name of the AWS Organization."
+  type        = string
+}
+
 variable "parent_id" {
-  description = "The parent ID of the organization (e.g., root organizational unit ID)"
+  description = "The parent ID of the AWS Organization (e.g., root ID)."
   type        = string
 }
 
 variable "dev_account_email" {
-  description = "Email address for the Development account"
+  description = "The email address for the development account."
   type        = string
 }
 
 variable "prod_account_email" {
-  description = "Email address for the Production account"
+  description = "The email address for the production account."
   type        = string
 }
 
 variable "security_account_email" {
-  description = "Email address for the Security account"
+  description = "The email address for the security account."
   type        = string
 }
 
 variable "audit_account_email" {
-  description = "Email address for the Audit account"
+  description = "The email address for the audit account."
   type        = string
 }
 
-variable "common_tags" {
-  description = "Common tags to apply to all resources"
+variable "default_tags" {
+  description = "Default tags to apply to all resources."
   type        = map(string)
   default     = {
-    Organization = "Genworx Organization"
-    Environment  = "Production"
+    Environment = "Production"
+    ManagedBy   = "Terraform"
   }
 
-variable "account_name" {
-  description = "The name of the AWS account"
-  type        = string
-}
-
-variable "email" {
-  description = "The email address associated with the AWS account"
+variable "organization_name" {
+  description = "The name of the AWS Organization."
   type        = string
 }
 
 variable "parent_id" {
-  description = "The parent ID of the organizational unit"
+  description = "The parent ID of the AWS Organization (e.g., root ID)."
   type        = string
 }
 
+variable "accounts" {
+  description = "A map of accounts to create in the AWS Organization."
+  type = map(object({
+    email = string
+    name  = string
+  }
+
 variable "tags" {
-  description = "Tags to apply to the AWS account"
+  description = "Tags to apply to all resources."
   type        = map(string)
 }
