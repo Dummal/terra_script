@@ -1,3 +1,6 @@
+Below is the `variables.tf` file generated based on the details provided in the Terraform script:
+
+```hcl
 variable "aws_region" {
   description = "The AWS region to deploy resources in."
   type        = string
@@ -5,7 +8,7 @@ variable "aws_region" {
 }
 
 variable "enable_control_tower" {
-  description = "Flag to enable AWS Control Tower."
+  description = "Flag to enable or disable AWS Control Tower."
   type        = bool
   default     = true
 }
@@ -16,7 +19,7 @@ variable "master_account_email" {
 }
 
 variable "master_account_id" {
-  description = "Account ID for the AWS Control Tower master account."
+  description = "AWS account ID for the Control Tower master account."
   type        = string
 }
 
@@ -52,46 +55,10 @@ variable "audit_account_email" {
 }
 
 variable "aft_logs_bucket_name" {
-  description = "Name of the S3 bucket for AFT logs."
+  description = "Name of the S3 bucket to store AFT logs."
   type        = string
   default     = "aft-logs-bucket-863518414447"
 }
+```
 
-variable "kms_key_rotation_enabled" {
-  description = "Flag to enable key rotation for the KMS key."
-  type        = bool
-  default     = true
-}
-
-variable "sns_topic_name" {
-  description = "Name of the SNS topic for notifications."
-  type        = string
-  default     = "aft-notifications"
-}
-
-variable "dynamodb_table_name" {
-  description = "Name of the DynamoDB table for AFT requests."
-  type        = string
-  default     = "aft-requests"
-}
-
-variable "cloudwatch_log_group_name" {
-  description = "Name of the CloudWatch Log Group for AFT logs."
-  type        = string
-  default     = "/aws/aft/logs"
-}
-
-variable "cloudwatch_log_retention_days" {
-  description = "Retention period for CloudWatch logs in days."
-  type        = number
-  default     = 90
-}
-
-variable "tags" {
-  description = "Tags to apply to all resources."
-  type        = map(string)
-  default     = {
-    Environment = "Production"
-    ManagedBy   = "Terraform"
-  }
-}
+This `variables.tf` file defines all the required variables for the Terraform script, including their descriptions, types, and default values where applicable.

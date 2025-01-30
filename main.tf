@@ -1,7 +1,6 @@
-```hcl
-# main.tf
-# This Terraform script sets up an AWS Control Tower environment with organizational units and accounts.
+Below is the exact `main.tf` file generated based on the details provided in the {terraform script}:
 
+```hcl
 terraform {
   required_providers {
     aws = {
@@ -9,6 +8,7 @@ terraform {
       version = "~> 4.0"
     }
   }
+
   required_version = ">= 1.3.0"
 }
 
@@ -16,114 +16,86 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Variables
-variable "aws_region" {
-  description = "The AWS region to deploy resources in."
-  type        = string
-  default     = "us-east-1" # Default region, can be overridden
-}
+module "control_tower" {
+  source = "./modules/control_tower"
 
-variable "control_tower_enabled" {
-  description = "Flag to enable AWS Control Tower."
-  type        = bool
-  default     = true
-}
-
-variable "master_account_email" {
-  description = "Email address for the master account."
-  type        = string
-}
-
-variable "master_account_id" {
-  description = "Master account ID."
-  type        = string
-}
-
-variable "development_account_email" {
-  description = "Email address for the development account."
-  type        = string
-}
-
-variable "production_account_email" {
-  description = "Email address for the production account."
-  type        = string
-}
-
-variable "shared_account_email" {
-  description = "Email address for the shared account."
-  type        = string
-}
-
-variable "security_account_email" {
-  description = "Email address for the security account."
-  type        = string
-}
-
-variable "audit_account_email" {
-  description = "Email address for the audit account."
-  type        = string
-}
-
-variable "aft_logs_bucket_name" {
-  description = "Name of the S3 bucket for AFT logs."
-  type        = string
-}
-
-variable "organizational_units" {
-  description = "List of organizational units to create."
-  type        = list(string)
-  default     = ["Security", "Audit Log", "Sandbox"] # Default OUs
-}
-
-# AWS Control Tower Setup
-resource "aws_organizations_organization" "org" {
-  feature_set = "ALL"
-}
-
-resource "aws_organizations_organizational_unit" "ou" {
-  for_each = toset(var.organizational_units)
-
-  name      = each.value
-  parent_id = aws_organizations_organization.org.id
-}
-
-# Example: S3 Bucket for AFT Logs
-resource "aws_s3_bucket" "aft_logs" {
-  bucket = var.aft_logs_bucket_name
+  enable_control_tower = var.enable_control_tower
+  master_account_email = var.master_account_email
+  master_account_id    = var.master_account_id
+  organizational_units = var.organizational_units
+  security_account_email = var.security_account_email
+  audit_account_email    = var.audit_account_email
 
   tags = {
-    Name        = "AFT Logs Bucket"
     Environment = "Production"
+    ManagedBy   = "Terraform"
   }
 }
 
-# Outputs
-output "organization_id" {
-  description = "The ID of the AWS Organization."
-  value       = aws_organizations_organization.org.id
+module "iam" {
+  source = "./modules/iam"
+
+  master_account_id = var.master_account_id
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
 }
 
-output "organizational_units" {
-  description = "The list of created organizational units."
-  value       = [for ou in aws_organizations_organizational_unit.ou : ou.name]
+module "aws_resources" {
+  source = "./modules/aws_resources"
+
+  aft_logs_bucket_name = var.aft_logs_bucket_name
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
 }
 
-output "aft_logs_bucket_name" {
-  description = "The name of the S3 bucket for AFT logs."
-  value       = aws_s3_bucket.aft_logs.bucket
+resource "aws_organizations_account" "dev_account" {
+  name      = "DevAccount"
+  email     = var.dev_account_email
+  parent_id = module.control_tower.security_ou_id
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_organizations_account" "prod_account" {
+  name      = "ProdAccount"
+  email     = var.prod_account_email
+  parent_id = module.control_tower.security_ou_id
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_organizations_account" "shared_account" {
+  name      = "SharedAccount"
+  email     = var.shared_account_email
+  parent_id = module.control_tower.security_ou_id
+
+  tags = {
+    Environment = "Production"
+    ManagedBy   = "Terraform"
+  }
 }
 ```
 
-### Instructions to Apply:
-1. Save the script in a file, e.g., `main.tf`.
-2. Create a `variables.tf` file to define the variables or override them using a `terraform.tfvars` file.
-3. Initialize Terraform: `terraform init`.
-4. Review the plan: `terraform plan`.
-5. Apply the configuration: `terraform apply`.
-6. Confirm the changes when prompted.
+This `main.tf` file includes the following:
+1. **Terraform Configuration**: Specifies the required provider (`aws`) and Terraform version.
+2. **Provider Block**: Configures the AWS provider with the region specified in the `aws_region` variable.
+3. **Modules**:
+   - `control_tower`: Sets up AWS Control Tower and organizational units.
+   - `iam`: Creates IAM roles and policies.
+   - `aws_resources`: Creates AWS infrastructure resources like S3, KMS, SNS, DynamoDB, and CloudWatch Log Group.
+4. **AWS Organization Accounts**: Creates the Dev, Prod, and Shared accounts under the Security OU.
+5. **Tags**: Adds consistent tags (`Environment` and `ManagedBy`) to all resources.
 
-### Assumptions:
-- AWS Control Tower is enabled (`control_tower_enabled` is set to `true` by default).
-- Organizational units are provided as a list in the `organizational_units` variable.
-- Sensitive data like emails and account IDs are passed as variables and not hardcoded.
-- The S3 bucket for AFT logs is created with a name provided in the `aft_logs_bucket_name` variable.
+Let me know if you need additional files like `variables.tf` or `outputs.tf`!
